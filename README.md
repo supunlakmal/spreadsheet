@@ -1,6 +1,8 @@
 # Spreadsheet
 
-A lightweight, client-only spreadsheet web application. All data persists in the URL hash for instant sharing—no backend required.
+![Spreadsheet logo](logo.png)
+
+A lightweight, client-only spreadsheet web application. All data persists in the URL hash for instant sharing - no backend required.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Vanilla JS](https://img.shields.io/badge/vanilla-JavaScript-yellow.svg)
@@ -12,6 +14,7 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 - **Zero Backend** - All state saved in URL hash, works completely offline
 - **Instant Sharing** - Copy URL to share your spreadsheet with anyone
 - **Dynamic Grid** - Expandable up to 30 rows and 15 columns (A-O)
+- **Arrow Key Navigation** - Move the active cell with arrow keys; Shift+Arrow expands selection
 - **Persistent State** - Browser back/forward buttons restore previous states
 
 ### Text Formatting
@@ -23,6 +26,7 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 ### Multi-Cell Selection (Google Sheets Style)
 - **Click & Drag** - Select rectangular ranges by dragging
 - **Shift+Click** - Extend selection from anchor point
+- **Shift+Arrow** - Extend selection with the keyboard
 - **Visual Feedback** - Selected cells highlighted with blue background
 - **Border Outline** - Blue border around selection edges
 - **Header Highlighting** - Row/column headers highlight for selected range
@@ -31,7 +35,7 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 ### Grid Management
 - **Add Row** - Expand grid rows (max 30)
 - **Add Column** - Expand grid columns (max 15)
-- **Clear Spreadsheet** - Reset to empty 10×10 grid with confirmation
+- **Clear Spreadsheet** - Reset to empty 10A-10 grid with confirmation
 - **Live Grid Size** - Display shows current dimensions
 
 ### Formula Support
@@ -56,7 +60,7 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 
 ### Accessibility
 - **ARIA Labels** - Screen reader support (e.g., "Cell A1")
-- **Keyboard Navigation** - Full keyboard access
+- **Keyboard Navigation** - Arrow keys move selection; formatting shortcuts supported
 - **Tooltips** - Descriptive hints on all controls
 - **Focus Management** - Proper focus handling
 
@@ -76,16 +80,17 @@ Your spreadsheet data is stored entirely in the URL hash:
 https://yoursite.com/spreadsheet/#{"rows":10,"cols":10,"data":[["A1","B1"],["A2","B2"]],"formulas":[[null,null],[null,"=SUM(A1:A2)"]],"theme":"light"}
 ```
 
-When you edit cells, the URL updates automatically (debounced at 200ms). Formulas are stored separately from displayed values, so both the results and the original formulas are preserved. Share the URL to share your data—no account or database needed.
+When you edit cells, the URL updates automatically (debounced at 200ms). Formulas are stored separately from displayed values, so both the results and the original formulas are preserved. Share the URL with anyone - no account or database needed.
 
 ## Usage
 
 | Action | How |
 |--------|-----|
-| Edit cell | Click any cell and type |
+| Edit cell | Double-click a cell or click and start typing |
 | Format text | Select text, click B/I/U buttons or use Ctrl+B/I/U |
+| Navigate cells | Arrow keys (when not editing) |
 | Select range | Click and drag across cells |
-| Extend selection | Shift+Click on another cell |
+| Extend selection | Shift+Click or Shift+Arrow |
 | Clear selection | Press Escape |
 | Add row | Click "+ Row" button (max 30) |
 | Add column | Click "+ Column" button (max 15) |
@@ -102,11 +107,12 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 | Ctrl+B | Bold |
 | Ctrl+I | Italic |
 | Ctrl+U | Underline |
-| Enter | Evaluate formula and move down |
+| Arrow keys | Move selection (when not editing) |
+| Shift+Arrow | Extend selection |
+| Enter | Evaluate formula and move down (or insert formula suggestion when dropdown is open) |
 | Escape | Clear selection / Close formula dropdown |
-| Tab | Move to next cell / Select formula suggestion |
-| Arrow Up/Down | Navigate formula suggestions |
-| Shift+Click | Extend selection |
+| Arrow Up/Down (formula dropdown) | Navigate suggestions |
+| Tab (formula dropdown) | Insert active suggestion |
 
 ## Tech Stack
 
@@ -132,18 +138,18 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 
 - Maximum 30 rows
 - Maximum 15 columns (A-O)
-- Default grid: 10 × 10
+- Default grid: 10 rows x 10 columns
 - URL length limits may apply for very large spreadsheets
 
 ## File Structure
 
 ```
 spreadsheet/
-├── index.html      # Single-page app structure
-├── styles.css      # All styling including dark mode
-├── script.js       # Application logic (IIFE module)
-├── CLAUDE.md       # Development documentation
-└── README.md       # This file
+|-- index.html      # Single-page app structure
+|-- styles.css      # All styling including dark mode
+|-- script.js       # Application logic (IIFE module)
+|-- CLAUDE.md       # Development documentation
+`-- README.md       # This file
 ```
 
 ## Architecture
@@ -167,6 +173,11 @@ http://localhost:3000
 ```
 
 ## Recent Updates
+
+### v1.4 - Keyboard Navigation
+- Arrow keys move the active selection without entering edit mode
+- Shift+Arrow expands selections from the anchor cell
+- Double-click or start typing to enter edit mode
 
 ### v1.3 - Formula Support
 - Added formula evaluation with `=SUM(range)` function
