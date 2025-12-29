@@ -33,9 +33,14 @@
         return String.fromCharCode(65 + col);
     }
 
-    // Encode state to URL-safe string (includes dimensions)
+    // Get current theme
+    function isDarkMode() {
+        return document.body.classList.contains('dark-mode');
+    }
+
+    // Encode state to URL-safe string (includes dimensions and theme)
     function encodeState() {
-        const state = { rows, cols, data };
+        const state = { rows, cols, data, theme: isDarkMode() ? 'dark' : 'light' };
         const json = JSON.stringify(state);
         return encodeURIComponent(json);
     }
@@ -74,7 +79,7 @@
                     d = createEmptyData(r, c);
                 }
 
-                return { rows: r, cols: c, data: d };
+                return { rows: r, cols: c, data: d, theme: parsed.theme || null };
             }
 
             // Handle legacy format (just array, assume 10x10)
@@ -88,12 +93,25 @@
                 while (d.length < DEFAULT_ROWS) {
                     d.push(Array(DEFAULT_COLS).fill(''));
                 }
-                return { rows: DEFAULT_ROWS, cols: DEFAULT_COLS, data: d };
+                return { rows: DEFAULT_ROWS, cols: DEFAULT_COLS, data: d, theme: null };
             }
         } catch (e) {
             console.warn('Failed to decode state from URL:', e);
         }
         return null;
+    }
+
+    // Apply theme to body
+    function applyTheme(theme) {
+        if (theme === 'dark') {
+            document.body.classList.add('dark-mode');
+        } else if (theme === 'light') {
+            document.body.classList.remove('dark-mode');
+        }
+        // Save to localStorage as well
+        try {
+            localStorage.setItem('spreadsheet-theme', theme);
+        } catch (e) {}
     }
 
     // Update URL hash without page jump
@@ -225,6 +243,11 @@
                 rows = loadedState.rows;
                 cols = loadedState.cols;
                 data = loadedState.data;
+
+                // Apply theme from URL if present
+                if (loadedState.theme) {
+                    applyTheme(loadedState.theme);
+                }
                 return;
             }
         }
@@ -235,8 +258,47 @@
         data = createEmptyData(rows, cols);
     }
 
+    // Toggle dark/light mode
+    function toggleTheme() {
+        const body = document.body;
+        const isDark = body.classList.toggle('dark-mode');
+        const theme = isDark ? 'dark' : 'light';
+
+        // Save preference to localStorage
+        try {
+            localStorage.setItem('spreadsheet-theme', theme);
+        } catch (e) {
+            // localStorage not available
+        }
+
+        // Update URL with new theme
+        debouncedUpdateURL();
+    }
+
+    // Load saved theme preference
+    function loadTheme() {
+        try {
+            const savedTheme = localStorage.getItem('spreadsheet-theme');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-mode');
+            } else if (savedTheme === 'light') {
+                document.body.classList.remove('dark-mode');
+            } else {
+                // Check system preference if no saved preference
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.body.classList.add('dark-mode');
+                }
+            }
+        } catch (e) {
+            // localStorage not available
+        }
+    }
+
     // Initialize the app
     function init() {
+        // Load theme preference first (before any rendering)
+        loadTheme();
+
         // Load any existing state from URL
         loadStateFromURL();
 
@@ -252,12 +314,16 @@
         // Button event listeners
         const addRowBtn = document.getElementById('add-row');
         const addColBtn = document.getElementById('add-col');
+        const themeToggleBtn = document.getElementById('theme-toggle');
 
         if (addRowBtn) {
             addRowBtn.addEventListener('click', addRow);
         }
         if (addColBtn) {
             addColBtn.addEventListener('click', addColumn);
+        }
+        if (themeToggleBtn) {
+            themeToggleBtn.addEventListener('click', toggleTheme);
         }
 
         // Handle browser back/forward
