@@ -1,50 +1,94 @@
-// 10x10 Spreadsheet Web App
+// Dynamic Spreadsheet Web App
 // Data persists in URL hash for easy sharing
 
 (function() {
     'use strict';
 
-    // Constants
-    const ROWS = 10;
-    const COLS = 10;
+    // Limits
+    const MAX_ROWS = 100;
+    const MAX_COLS = 26;
     const DEBOUNCE_DELAY = 200;
 
-    // Data model - 10x10 array of cell values
-    let data = createEmptyData();
+    // Default starting size
+    const DEFAULT_ROWS = 10;
+    const DEFAULT_COLS = 10;
+
+    // Dynamic dimensions
+    let rows = DEFAULT_ROWS;
+    let cols = DEFAULT_COLS;
+
+    // Data model - dynamic 2D array
+    let data = createEmptyData(rows, cols);
 
     // Debounce timer
     let debounceTimer = null;
 
-    // Create empty 10x10 data array
-    function createEmptyData() {
-        return Array(ROWS).fill(null).map(() => Array(COLS).fill(''));
+    // Create empty data array with specified dimensions
+    function createEmptyData(r, c) {
+        return Array(r).fill(null).map(() => Array(c).fill(''));
     }
 
-    // Convert column index to letter (0 = A, 1 = B, etc.)
+    // Convert column index to letter (0 = A, 1 = B, ... 25 = Z)
     function colToLetter(col) {
         return String.fromCharCode(65 + col);
     }
 
-    // Encode data to URL-safe string
+    // Encode state to URL-safe string (includes dimensions)
     function encodeState() {
-        const json = JSON.stringify(data);
+        const state = { rows, cols, data };
+        const json = JSON.stringify(state);
         return encodeURIComponent(json);
     }
 
-    // Decode URL hash to data array
+    // Decode URL hash to state object
     function decodeState(hash) {
         try {
             const decoded = decodeURIComponent(hash);
             const parsed = JSON.parse(decoded);
 
-            // Validate structure
-            if (Array.isArray(parsed) && parsed.length === ROWS) {
-                return parsed.map(row => {
-                    if (Array.isArray(row) && row.length === COLS) {
-                        return row.map(cell => String(cell || ''));
+            // Handle new format (object with rows, cols, data)
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const r = Math.min(Math.max(1, parsed.rows || DEFAULT_ROWS), MAX_ROWS);
+                const c = Math.min(Math.max(1, parsed.cols || DEFAULT_COLS), MAX_COLS);
+
+                // Validate and normalize data array
+                let d = parsed.data;
+                if (Array.isArray(d)) {
+                    // Ensure correct dimensions
+                    d = d.slice(0, r).map(row => {
+                        if (Array.isArray(row)) {
+                            return row.slice(0, c).map(cell => String(cell || ''));
+                        }
+                        return Array(c).fill('');
+                    });
+                    // Pad rows if needed
+                    while (d.length < r) {
+                        d.push(Array(c).fill(''));
                     }
-                    return Array(COLS).fill('');
+                    // Pad columns if needed
+                    d = d.map(row => {
+                        while (row.length < c) row.push('');
+                        return row;
+                    });
+                } else {
+                    d = createEmptyData(r, c);
+                }
+
+                return { rows: r, cols: c, data: d };
+            }
+
+            // Handle legacy format (just array, assume 10x10)
+            if (Array.isArray(parsed)) {
+                const d = parsed.slice(0, DEFAULT_ROWS).map(row => {
+                    if (Array.isArray(row)) {
+                        return row.slice(0, DEFAULT_COLS).map(cell => String(cell || ''));
+                    }
+                    return Array(DEFAULT_COLS).fill('');
                 });
+                while (d.length < DEFAULT_ROWS) {
+                    d.push(Array(DEFAULT_COLS).fill(''));
+                }
+                return { rows: DEFAULT_ROWS, cols: DEFAULT_COLS, data: d };
             }
         } catch (e) {
             console.warn('Failed to decode state from URL:', e);
@@ -72,11 +116,30 @@
         debounceTimer = setTimeout(updateURL, DEBOUNCE_DELAY);
     }
 
+    // Update button disabled states and grid size display
+    function updateUI() {
+        const addRowBtn = document.getElementById('add-row');
+        const addColBtn = document.getElementById('add-col');
+        const gridSizeEl = document.getElementById('grid-size');
+
+        if (addRowBtn) {
+            addRowBtn.disabled = (rows >= MAX_ROWS);
+        }
+        if (addColBtn) {
+            addColBtn.disabled = (cols >= MAX_COLS);
+        }
+        if (gridSizeEl) {
+            gridSizeEl.textContent = `${rows} × ${cols}`;
+        }
+    }
+
     // Render the spreadsheet grid
     function renderGrid() {
         const container = document.getElementById('spreadsheet');
         if (!container) return;
 
+        // Set dynamic grid columns
+        container.style.gridTemplateColumns = `40px repeat(${cols}, minmax(80px, 1fr))`;
         container.innerHTML = '';
 
         // Corner cell (empty)
@@ -84,8 +147,8 @@
         corner.className = 'corner-cell';
         container.appendChild(corner);
 
-        // Column headers (A-J)
-        for (let col = 0; col < COLS; col++) {
+        // Column headers (A-Z)
+        for (let col = 0; col < cols; col++) {
             const header = document.createElement('div');
             header.className = 'header-cell';
             header.textContent = colToLetter(col);
@@ -93,15 +156,15 @@
         }
 
         // Rows
-        for (let row = 0; row < ROWS; row++) {
-            // Row header (1-10)
+        for (let row = 0; row < rows; row++) {
+            // Row header (1, 2, 3...)
             const rowHeader = document.createElement('div');
             rowHeader.className = 'header-cell';
             rowHeader.textContent = row + 1;
             container.appendChild(rowHeader);
 
             // Data cells
-            for (let col = 0; col < COLS; col++) {
+            for (let col = 0; col < cols; col++) {
                 const cell = document.createElement('div');
                 cell.className = 'cell';
 
@@ -116,6 +179,8 @@
                 container.appendChild(cell);
             }
         }
+
+        updateUI();
     }
 
     // Handle input changes
@@ -126,10 +191,28 @@
         const row = parseInt(input.dataset.row, 10);
         const col = parseInt(input.dataset.col, 10);
 
-        if (!isNaN(row) && !isNaN(col)) {
+        if (!isNaN(row) && !isNaN(col) && row < rows && col < cols) {
             data[row][col] = input.value;
             debouncedUpdateURL();
         }
+    }
+
+    // Add a new row
+    function addRow() {
+        if (rows >= MAX_ROWS) return;
+        rows++;
+        data.push(Array(cols).fill(''));
+        renderGrid();
+        debouncedUpdateURL();
+    }
+
+    // Add a new column
+    function addColumn() {
+        if (cols >= MAX_COLS) return;
+        cols++;
+        data.forEach(row => row.push(''));
+        renderGrid();
+        debouncedUpdateURL();
     }
 
     // Load state from URL on page load
@@ -137,11 +220,19 @@
         const hash = window.location.hash.slice(1); // Remove #
 
         if (hash) {
-            const loadedData = decodeState(hash);
-            if (loadedData) {
-                data = loadedData;
+            const loadedState = decodeState(hash);
+            if (loadedState) {
+                rows = loadedState.rows;
+                cols = loadedState.cols;
+                data = loadedState.data;
+                return;
             }
         }
+
+        // Default state
+        rows = DEFAULT_ROWS;
+        cols = DEFAULT_COLS;
+        data = createEmptyData(rows, cols);
     }
 
     // Initialize the app
@@ -156,6 +247,17 @@
         const container = document.getElementById('spreadsheet');
         if (container) {
             container.addEventListener('input', handleInput);
+        }
+
+        // Button event listeners
+        const addRowBtn = document.getElementById('add-row');
+        const addColBtn = document.getElementById('add-col');
+
+        if (addRowBtn) {
+            addRowBtn.addEventListener('click', addRow);
+        }
+        if (addColBtn) {
+            addColBtn.addEventListener('click', addColumn);
         }
 
         // Handle browser back/forward

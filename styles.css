@@ -18,9 +18,43 @@ body {
 
 h1 {
     color: #333;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
     font-weight: 500;
     font-size: 1.5rem;
+}
+
+.toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    align-items: center;
+}
+
+.toolbar button {
+    padding: 8px 16px;
+    font-size: 0.875rem;
+    font-family: inherit;
+    background-color: #4a90d9;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.toolbar button:hover:not(:disabled) {
+    background-color: #3a7bc8;
+}
+
+.toolbar button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.grid-size {
+    color: #888;
+    font-size: 0.875rem;
+    margin-left: auto;
 }
 
 .grid-wrapper {
@@ -33,7 +67,7 @@ h1 {
 
 .spreadsheet {
     display: grid;
-    grid-template-columns: 40px repeat(10, minmax(80px, 1fr));
+    /* grid-template-columns set dynamically via JS */
     gap: 0;
     min-width: fit-content;
 }
@@ -108,13 +142,18 @@ h1 {
         margin-bottom: 12px;
     }
 
+    .toolbar {
+        flex-wrap: wrap;
+    }
+
+    .toolbar button {
+        padding: 6px 12px;
+        font-size: 0.75rem;
+    }
+
     .grid-wrapper {
         padding: 8px;
         border-radius: 4px;
-    }
-
-    .spreadsheet {
-        grid-template-columns: 32px repeat(10, minmax(70px, 1fr));
     }
 
     .header-cell {
