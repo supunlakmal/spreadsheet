@@ -357,6 +357,49 @@ body {
     position: relative;
 }
 
+/* Formula suggestions dropdown */
+.formula-dropdown {
+    position: fixed;
+    min-width: 220px;
+    max-width: 320px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    padding: 4px;
+    z-index: 10;
+    display: none;
+}
+
+.formula-dropdown.open {
+    display: block;
+}
+
+.formula-item {
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.formula-item:hover,
+.formula-item.active {
+    background: var(--bg-cell-focus);
+}
+
+.formula-name {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 0.8125rem;
+}
+
+.formula-hint {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
 /* Multi-cell selection styles */
 .cell.cell-selected {
     background-color: var(--selection-bg);

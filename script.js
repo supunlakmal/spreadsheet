@@ -13,6 +13,9 @@
     // Default starting size
     const DEFAULT_ROWS = 10;
     const DEFAULT_COLS = 10;
+    const FORMULA_SUGGESTIONS = [
+        { name: 'SUM', signature: 'SUM(range)', description: 'Adds numbers in a range' }
+    ];
 
     // Dynamic dimensions
     let rows = DEFAULT_ROWS;
@@ -41,6 +44,10 @@
     let formulaEditCell = null;        // { row, col, element } of cell being edited
     let formulaRangeStart = null;      // Start of range being selected
     let formulaRangeEnd = null;        // End of range being selected
+    let formulaDropdown = null;        // DOM node for formula suggestions
+    let formulaDropdownItems = [];     // List of visible dropdown items
+    let formulaDropdownIndex = -1;     // Active item index
+    let formulaDropdownAnchor = null;  // Cell element used for positioning
 
     // Create empty data array with specified dimensions
     function createEmptyData(r, c) {
@@ -126,6 +133,180 @@
         selection.addRange(range);
     }
 
+    // Move caret to end of contentEditable element
+    function setCaretToEnd(element) {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.collapse(false);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+
+    function getFormulaQuery(rawValue) {
+        const match = rawValue.match(/^=\s*([A-Z]*)$/i);
+        if (!match) return null;
+        return match[1].toUpperCase();
+    }
+
+    function getFormulaSuggestions(query) {
+        if (query === null) return [];
+        if (query === '') return FORMULA_SUGGESTIONS.slice();
+        return FORMULA_SUGGESTIONS.filter(item => item.name.startsWith(query));
+    }
+
+    function createFormulaDropdown() {
+        if (formulaDropdown) return;
+        const dropdown = document.createElement('div');
+        dropdown.className = 'formula-dropdown';
+        dropdown.setAttribute('role', 'listbox');
+        dropdown.setAttribute('aria-hidden', 'true');
+
+        dropdown.addEventListener('mousedown', function(event) {
+            event.preventDefault();
+        });
+
+        dropdown.addEventListener('click', function(event) {
+            const item = event.target.closest('.formula-item');
+            if (!item) return;
+            const formulaName = item.dataset.formula;
+            if (formulaName) {
+                applyFormulaSuggestion(formulaName);
+            }
+        });
+
+        document.body.appendChild(dropdown);
+        formulaDropdown = dropdown;
+    }
+
+    function isFormulaDropdownOpen() {
+        return !!(formulaDropdown && formulaDropdown.classList.contains('open'));
+    }
+
+    function setActiveFormulaItem(index) {
+        formulaDropdownIndex = index;
+        formulaDropdownItems.forEach((item, idx) => {
+            if (idx === index) {
+                item.classList.add('active');
+                item.setAttribute('aria-selected', 'true');
+                item.scrollIntoView({ block: 'nearest' });
+            } else {
+                item.classList.remove('active');
+                item.setAttribute('aria-selected', 'false');
+            }
+        });
+    }
+
+    function positionFormulaDropdown(anchor) {
+        if (!formulaDropdown || !anchor) return;
+        const rect = anchor.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const padding = 6;
+
+        formulaDropdown.style.left = `${rect.left}px`;
+        formulaDropdown.style.top = `${rect.bottom + 4}px`;
+
+        const dropdownRect = formulaDropdown.getBoundingClientRect();
+        let left = rect.left;
+        let top = rect.bottom + 4;
+
+        if (left + dropdownRect.width > viewportWidth - padding) {
+            left = Math.max(padding, viewportWidth - dropdownRect.width - padding);
+        }
+
+        if (top + dropdownRect.height > viewportHeight - padding) {
+            const above = rect.top - dropdownRect.height - 4;
+            if (above > padding) {
+                top = above;
+            }
+        }
+
+        formulaDropdown.style.left = `${left}px`;
+        formulaDropdown.style.top = `${top}px`;
+    }
+
+    function showFormulaDropdown() {
+        if (!formulaDropdown) return;
+        formulaDropdown.classList.add('open');
+        formulaDropdown.setAttribute('aria-hidden', 'false');
+    }
+
+    function hideFormulaDropdown() {
+        if (!formulaDropdown) return;
+        formulaDropdown.classList.remove('open');
+        formulaDropdown.setAttribute('aria-hidden', 'true');
+        formulaDropdownItems = [];
+        formulaDropdownIndex = -1;
+        formulaDropdownAnchor = null;
+    }
+
+    function updateFormulaDropdown(anchor, rawValue) {
+        createFormulaDropdown();
+        const query = getFormulaQuery(rawValue);
+        const suggestions = getFormulaSuggestions(query);
+        if (!anchor || suggestions.length === 0 || query === null) {
+            hideFormulaDropdown();
+            return;
+        }
+
+        formulaDropdownAnchor = anchor;
+        formulaDropdown.innerHTML = '';
+        suggestions.forEach(item => {
+            const option = document.createElement('div');
+            option.className = 'formula-item';
+            option.dataset.formula = item.name;
+            option.setAttribute('role', 'option');
+            option.setAttribute('aria-selected', 'false');
+
+            const nameEl = document.createElement('div');
+            nameEl.className = 'formula-name';
+            nameEl.textContent = item.name;
+
+            const hintEl = document.createElement('div');
+            hintEl.className = 'formula-hint';
+            hintEl.textContent = `${item.signature} - ${item.description}`;
+
+            option.appendChild(nameEl);
+            option.appendChild(hintEl);
+            formulaDropdown.appendChild(option);
+        });
+
+        formulaDropdownItems = Array.from(formulaDropdown.querySelectorAll('.formula-item'));
+        setActiveFormulaItem(0);
+        showFormulaDropdown();
+        positionFormulaDropdown(anchor);
+    }
+
+    function moveFormulaDropdownSelection(delta) {
+        if (!formulaDropdownItems.length) return;
+        let nextIndex = formulaDropdownIndex + delta;
+        if (nextIndex < 0) nextIndex = formulaDropdownItems.length - 1;
+        if (nextIndex >= formulaDropdownItems.length) nextIndex = 0;
+        setActiveFormulaItem(nextIndex);
+    }
+
+    function applyFormulaSuggestion(formulaName) {
+        const target = formulaEditCell ? formulaEditCell.element : document.activeElement;
+        if (!target || !target.classList.contains('cell-content')) return;
+
+        const row = parseInt(target.dataset.row, 10);
+        const col = parseInt(target.dataset.col, 10);
+        if (isNaN(row) || isNaN(col)) return;
+
+        const newValue = `=${formulaName}(`;
+        target.innerText = newValue;
+        setCaretToEnd(target);
+
+        formulaEditMode = true;
+        formulaEditCell = { row, col, element: target };
+        formulas[row][col] = newValue;
+        data[row][col] = newValue;
+
+        hideFormulaDropdown();
+        debouncedUpdateURL();
+    }
+
     // ========== Formula Evaluation Functions ==========
 
     // Get numeric value from cell (returns 0 for empty/non-numeric)
@@ -174,10 +355,46 @@
 
     // Recalculate all formula cells
     function recalculateFormulas() {
+        const container = document.getElementById('spreadsheet');
+        const activeElement = document.activeElement;
+        const maxPasses = rows * cols;
+        let needsUpdate = false;
+
+        // Multiple passes to propagate formulas that depend on other formulas.
+        for (let pass = 0; pass < maxPasses; pass++) {
+            let changed = false;
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const formula = formulas[r][c];
+                    if (formula && formula.startsWith('=')) {
+                        const result = String(evaluateFormula(formula));
+                        if (data[r][c] !== result) {
+                            data[r][c] = result;
+                            changed = true;
+                            needsUpdate = true;
+                        }
+                    }
+                }
+            }
+            if (!changed) break;
+        }
+
+        if (!needsUpdate || !container) return;
+
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
-                if (formulas[r][c] && formulas[r][c].startsWith('=')) {
-                    data[r][c] = String(evaluateFormula(formulas[r][c]));
+                const formula = formulas[r][c];
+                if (formula && formula.startsWith('=')) {
+                    const cellContent = container.querySelector(
+                        `.cell-content[data-row="${r}"][data-col="${c}"]`
+                    );
+                    if (!cellContent) continue;
+
+                    const isEditingFormula = cellContent === activeElement &&
+                        cellContent.innerText.trim().startsWith('=');
+                    if (!isEditingFormula) {
+                        cellContent.innerText = data[r][c];
+                    }
                 }
             }
         }
@@ -411,6 +628,8 @@
                 // Store formula but DON'T evaluate during typing
                 formulas[row][col] = rawValue;
                 data[row][col] = rawValue;
+
+                updateFormulaDropdown(target, rawValue);
             } else {
                 // Exit formula edit mode
                 formulaEditMode = false;
@@ -419,6 +638,8 @@
                 // Regular value - clear any existing formula
                 formulas[row][col] = '';
                 data[row][col] = target.innerHTML;
+
+                hideFormulaDropdown();
 
                 // Recalculate dependent formulas when regular values change
                 recalculateFormulas();
@@ -606,6 +827,8 @@
         const target = event.target;
         if (!target.classList.contains('cell-content')) return;
 
+        hideFormulaDropdown();
+
         const row = parseInt(target.dataset.row, 10);
         const col = parseInt(target.dataset.col, 10);
 
@@ -681,6 +904,8 @@
             if (row !== formulaEditCell.row || col !== formulaEditCell.col) {
                 event.preventDefault();
                 event.stopPropagation();
+
+                hideFormulaDropdown();
 
                 // Start range selection for formula
                 formulaRangeStart = { row, col };
@@ -799,6 +1024,32 @@
     }
 
     function handleSelectionKeyDown(event) {
+        if (isFormulaDropdownOpen()) {
+            if (event.key === 'ArrowDown') {
+                moveFormulaDropdownSelection(1);
+                event.preventDefault();
+                return;
+            }
+            if (event.key === 'ArrowUp') {
+                moveFormulaDropdownSelection(-1);
+                event.preventDefault();
+                return;
+            }
+            if (event.key === 'Enter' || event.key === 'Tab') {
+                const activeItem = formulaDropdownItems[formulaDropdownIndex];
+                if (activeItem) {
+                    applyFormulaSuggestion(activeItem.dataset.formula);
+                }
+                event.preventDefault();
+                return;
+            }
+            if (event.key === 'Escape') {
+                hideFormulaDropdown();
+                event.preventDefault();
+                return;
+            }
+        }
+
         // Escape key clears selection
         if (event.key === 'Escape' && hasMultiSelection()) {
             clearSelection();
@@ -1124,6 +1375,21 @@
             container.addEventListener('touchmove', handleTouchMove, { passive: false });
             container.addEventListener('touchend', handleTouchEnd);
         }
+
+        const gridWrapper = document.querySelector('.grid-wrapper');
+        if (gridWrapper) {
+            gridWrapper.addEventListener('scroll', function() {
+                if (isFormulaDropdownOpen() && formulaDropdownAnchor) {
+                    positionFormulaDropdown(formulaDropdownAnchor);
+                }
+            });
+        }
+
+        window.addEventListener('resize', function() {
+            if (isFormulaDropdownOpen() && formulaDropdownAnchor) {
+                positionFormulaDropdown(formulaDropdownAnchor);
+            }
+        });
 
         // Global mouseup to catch drag ending outside container
         document.addEventListener('mouseup', handleMouseUp);
