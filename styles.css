@@ -238,6 +238,12 @@ body {
     transition: background-color 0.3s, border-color 0.3s, color 0.3s;
 }
 
+.header-cell.header-active {
+    background-color: var(--bg-cell-focus);
+    border-color: var(--accent-color);
+    color: var(--text-primary);
+}
+
 /* Column headers stick to top */
 .header-cell.col-header {
     top: 0;

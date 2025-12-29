@@ -8,6 +8,7 @@
     const MAX_ROWS = 30;
     const MAX_COLS = 15;
     const DEBOUNCE_DELAY = 200;
+    const ACTIVE_HEADER_CLASS = 'header-active';
 
     // Default starting size
     const DEFAULT_ROWS = 10;
@@ -22,6 +23,10 @@
 
     // Debounce timer
     let debounceTimer = null;
+
+    // Active header tracking for row/column highlight
+    let activeRow = null;
+    let activeCol = null;
 
     // Create empty data array with specified dimensions
     function createEmptyData(r, c) {
@@ -170,6 +175,7 @@
             const header = document.createElement('div');
             header.className = 'header-cell col-header';
             header.textContent = colToLetter(col);
+            header.dataset.col = col;
             container.appendChild(header);
         }
 
@@ -179,6 +185,7 @@
             const rowHeader = document.createElement('div');
             rowHeader.className = 'header-cell row-header';
             rowHeader.textContent = row + 1;
+            rowHeader.dataset.row = row;
             container.appendChild(rowHeader);
 
             // Data cells
@@ -213,6 +220,59 @@
             data[row][col] = input.value;
             debouncedUpdateURL();
         }
+    }
+
+    function clearActiveHeaders() {
+        if (activeRow !== null) {
+            const rowHeader = document.querySelector(`.row-header[data-row="${activeRow}"]`);
+            if (rowHeader) rowHeader.classList.remove(ACTIVE_HEADER_CLASS);
+        }
+        if (activeCol !== null) {
+            const colHeader = document.querySelector(`.col-header[data-col="${activeCol}"]`);
+            if (colHeader) colHeader.classList.remove(ACTIVE_HEADER_CLASS);
+        }
+        activeRow = null;
+        activeCol = null;
+    }
+
+    function setActiveHeaders(row, col) {
+        if (activeRow === row && activeCol === col) return;
+        clearActiveHeaders();
+        activeRow = row;
+        activeCol = col;
+
+        const rowHeader = document.querySelector(`.row-header[data-row="${row}"]`);
+        if (rowHeader) rowHeader.classList.add(ACTIVE_HEADER_CLASS);
+
+        const colHeader = document.querySelector(`.col-header[data-col="${col}"]`);
+        if (colHeader) colHeader.classList.add(ACTIVE_HEADER_CLASS);
+    }
+
+    function handleFocusIn(event) {
+        const input = event.target;
+        if (input.tagName !== 'INPUT') return;
+
+        const row = parseInt(input.dataset.row, 10);
+        const col = parseInt(input.dataset.col, 10);
+
+        if (!isNaN(row) && !isNaN(col)) {
+            setActiveHeaders(row, col);
+        }
+    }
+
+    function handleFocusOut(event) {
+        const input = event.target;
+        if (input.tagName !== 'INPUT') return;
+
+        const container = document.getElementById('spreadsheet');
+        if (!container) return;
+
+        const next = event.relatedTarget;
+        if (next && container.contains(next)) {
+            return;
+        }
+
+        clearActiveHeaders();
     }
 
     // Add a new row
@@ -355,6 +415,8 @@
         const container = document.getElementById('spreadsheet');
         if (container) {
             container.addEventListener('input', handleInput);
+            container.addEventListener('focusin', handleFocusIn);
+            container.addEventListener('focusout', handleFocusOut);
         }
 
         // Button event listeners
