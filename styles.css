@@ -74,6 +74,13 @@ body {
     font-weight: 500;
     font-size: 1.25rem;
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.header h1 i {
+    color: var(--accent-color);
 }
 
 .toolbar {
@@ -93,6 +100,13 @@ body {
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.toolbar button i {
+    font-size: 0.75rem;
 }
 
 .toolbar button:hover:not(:disabled) {
@@ -113,13 +127,18 @@ body {
 .theme-toggle {
     background: transparent !important;
     border: 1px solid var(--border-color) !important;
-    padding: 4px 8px !important;
-    font-size: 1rem !important;
-    line-height: 1;
+    padding: 8px 10px !important;
+    font-size: 0.875rem !important;
+    color: var(--text-secondary) !important;
 }
 
 .theme-toggle:hover:not(:disabled) {
     background: var(--bg-header) !important;
+    color: var(--text-primary) !important;
+}
+
+.theme-toggle i {
+    font-size: 0.875rem !important;
 }
 
 .icon-dark {
@@ -140,9 +159,12 @@ body {
     align-items: center;
     justify-content: center;
     color: var(--text-secondary);
-    padding: 6px;
+    padding: 8px 10px;
     border-radius: 4px;
+    border: 1px solid var(--border-color);
     transition: color 0.2s, background-color 0.2s;
+    text-decoration: none;
+    font-size: 1rem;
 }
 
 .github-link:hover {
@@ -150,14 +172,17 @@ body {
     background-color: var(--bg-header);
 }
 
-.github-link svg {
-    display: block;
-}
-
 .grid-size {
     color: var(--text-muted);
     font-size: 0.8125rem;
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.grid-size i {
+    opacity: 0.7;
 }
 
 /* Main grid area - fills remaining space */
@@ -260,6 +285,13 @@ body {
     border-top: 1px solid var(--border-color);
     flex-shrink: 0;
     transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hint i {
+    opacity: 0.7;
 }
 
 /* Responsive adjustments */
