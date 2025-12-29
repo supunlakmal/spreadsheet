@@ -28,6 +28,9 @@
     // Formula storage - parallel array to data
     let formulas = createEmptyData(rows, cols);
 
+    // Cell styles - alignment and background color
+    let cellStyles = createEmptyCellStyles(rows, cols);
+
     // Debounce timer
     let debounceTimer = null;
 
@@ -54,6 +57,12 @@
     // Create empty data array with specified dimensions
     function createEmptyData(r, c) {
         return Array(r).fill(null).map(() => Array(c).fill(''));
+    }
+
+    function createEmptyCellStyles(r, c) {
+        return Array(r).fill(null).map(() =>
+            Array(c).fill(null).map(() => ({ align: '', bg: '' }))
+        );
     }
 
     // Convert column index to letter (0 = A, 1 = B, ... 25 = Z)
@@ -438,6 +447,32 @@
         return document.body.classList.contains('dark-mode');
     }
 
+    function normalizeAlignment(value) {
+        if (value === 'left' || value === 'center' || value === 'right') {
+            return value;
+        }
+        return '';
+    }
+
+    function normalizeCellStyles(styles, r, c) {
+        const normalized = createEmptyCellStyles(r, c);
+        if (!Array.isArray(styles)) return normalized;
+
+        for (let row = 0; row < r; row++) {
+            const sourceRow = Array.isArray(styles[row]) ? styles[row] : [];
+            for (let col = 0; col < c; col++) {
+                const cellStyle = sourceRow[col];
+                if (cellStyle && typeof cellStyle === 'object') {
+                    normalized[row][col] = {
+                        align: normalizeAlignment(cellStyle.align),
+                        bg: typeof cellStyle.bg === 'string' ? cellStyle.bg : ''
+                    };
+                }
+            }
+        }
+        return normalized;
+    }
+
     // Encode state to URL-safe string (includes dimensions and theme)
     function encodeState() {
         const state = {
@@ -445,6 +480,7 @@
             cols,
             data,
             formulas,
+            cellStyles,
             theme: isDarkMode() ? 'dark' : 'light'
         };
         const json = JSON.stringify(state);
@@ -505,7 +541,15 @@
                     f = createEmptyData(r, c);
                 }
 
-                return { rows: r, cols: c, data: d, formulas: f, theme: parsed.theme || null };
+                const s = normalizeCellStyles(parsed.cellStyles, r, c);
+                return {
+                    rows: r,
+                    cols: c,
+                    data: d,
+                    formulas: f,
+                    cellStyles: s,
+                    theme: parsed.theme || null
+                };
             }
 
             // Handle legacy format (just array, assume 10x10)
@@ -520,7 +564,8 @@
                     d.push(Array(DEFAULT_COLS).fill(''));
                 }
                 const f = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
-                return { rows: DEFAULT_ROWS, cols: DEFAULT_COLS, data: d, formulas: f, theme: null };
+                const s = createEmptyCellStyles(DEFAULT_ROWS, DEFAULT_COLS);
+                return { rows: DEFAULT_ROWS, cols: DEFAULT_COLS, data: d, formulas: f, cellStyles: s, theme: null };
             }
         } catch (e) {
             console.warn('Failed to decode state from URL:', e);
@@ -627,6 +672,19 @@
                 contentDiv.dataset.col = col;
                 contentDiv.innerHTML = data[row][col];
                 contentDiv.setAttribute('aria-label', `Cell ${colToLetter(col)}${row + 1}`);
+
+                const style = cellStyles[row][col];
+                if (style) {
+                    contentDiv.style.textAlign = style.align || '';
+                    if (style.bg) {
+                        cell.style.setProperty('--cell-bg', style.bg);
+                    } else {
+                        cell.style.removeProperty('--cell-bg');
+                    }
+                } else {
+                    contentDiv.style.textAlign = '';
+                    cell.style.removeProperty('--cell-bg');
+                }
 
                 cell.appendChild(contentDiv);
                 container.appendChild(cell);
@@ -831,6 +889,11 @@
 
     function getCellContentElement(row, col) {
         return document.querySelector(`.cell-content[data-row="${row}"][data-col="${col}"]`);
+    }
+
+    function getCellElement(row, col) {
+        const cellContent = getCellContentElement(row, col);
+        return cellContent ? cellContent.parentElement : null;
     }
 
     function focusCellAt(row, col) {
@@ -1289,6 +1352,78 @@
         }
     }
 
+    function forEachTargetCell(callback) {
+        const bounds = getSelectionBounds();
+        if (bounds) {
+            for (let r = bounds.minRow; r <= bounds.maxRow; r++) {
+                for (let c = bounds.minCol; c <= bounds.maxCol; c++) {
+                    callback(r, c);
+                }
+            }
+            return true;
+        }
+
+        const activeElement = document.activeElement;
+        if (activeElement && activeElement.classList.contains('cell-content')) {
+            const row = parseInt(activeElement.dataset.row, 10);
+            const col = parseInt(activeElement.dataset.col, 10);
+            if (!isNaN(row) && !isNaN(col)) {
+                callback(row, col);
+                return true;
+            }
+        }
+
+        if (activeRow !== null && activeCol !== null) {
+            callback(activeRow, activeCol);
+            return true;
+        }
+
+        return false;
+    }
+
+    function applyAlignment(align) {
+        const normalized = normalizeAlignment(align);
+        if (!normalized) return;
+
+        const updated = forEachTargetCell(function(row, col) {
+            if (!cellStyles[row]) cellStyles[row] = [];
+            if (!cellStyles[row][col]) cellStyles[row][col] = { align: '', bg: '' };
+            cellStyles[row][col].align = normalized;
+
+            const cellContent = getCellContentElement(row, col);
+            if (cellContent) {
+                cellContent.style.textAlign = normalized;
+            }
+        });
+
+        if (updated) {
+            debouncedUpdateURL();
+        }
+    }
+
+    function applyCellBackground(color) {
+        if (typeof color !== 'string') return;
+
+        const updated = forEachTargetCell(function(row, col) {
+            if (!cellStyles[row]) cellStyles[row] = [];
+            if (!cellStyles[row][col]) cellStyles[row][col] = { align: '', bg: '' };
+            cellStyles[row][col].bg = color;
+
+            const cell = getCellElement(row, col);
+            if (cell) {
+                if (color) {
+                    cell.style.setProperty('--cell-bg', color);
+                } else {
+                    cell.style.removeProperty('--cell-bg');
+                }
+            }
+        });
+
+        if (updated) {
+            debouncedUpdateURL();
+        }
+    }
+
     // Apply text formatting using execCommand
     function applyFormat(command) {
         document.execCommand(command, false, null);
@@ -1325,6 +1460,7 @@
         cols = DEFAULT_COLS;
         data = createEmptyData(rows, cols);
         formulas = createEmptyData(rows, cols);
+        cellStyles = createEmptyCellStyles(rows, cols);
 
         // Clear any selection
         clearSelection();
@@ -1340,6 +1476,7 @@
         rows++;
         data.push(Array(cols).fill(''));
         formulas.push(Array(cols).fill(''));
+        cellStyles.push(Array(cols).fill(null).map(() => ({ align: '', bg: '' })));
         renderGrid();
         debouncedUpdateURL();
     }
@@ -1350,6 +1487,7 @@
         cols++;
         data.forEach(row => row.push(''));
         formulas.forEach(row => row.push(''));
+        cellStyles.forEach(row => row.push({ align: '', bg: '' }));
         renderGrid();
         debouncedUpdateURL();
     }
@@ -1365,6 +1503,7 @@
                 cols = loadedState.cols;
                 data = loadedState.data;
                 formulas = loadedState.formulas || createEmptyData(rows, cols);
+                cellStyles = loadedState.cellStyles || createEmptyCellStyles(rows, cols);
 
                 // Apply theme from URL if present
                 if (loadedState.theme) {
@@ -1378,6 +1517,7 @@
         rows = DEFAULT_ROWS;
         cols = DEFAULT_COLS;
         data = createEmptyData(rows, cols);
+        cellStyles = createEmptyCellStyles(rows, cols);
         formulas = createEmptyData(rows, cols);
     }
 
@@ -1517,6 +1657,10 @@
         const boldBtn = document.getElementById('format-bold');
         const italicBtn = document.getElementById('format-italic');
         const underlineBtn = document.getElementById('format-underline');
+        const alignLeftBtn = document.getElementById('align-left');
+        const alignCenterBtn = document.getElementById('align-center');
+        const alignRightBtn = document.getElementById('align-right');
+        const cellBgPicker = document.getElementById('cell-bg-color');
 
         if (boldBtn) {
             boldBtn.addEventListener('mousedown', function(e) {
@@ -1534,6 +1678,29 @@
             underlineBtn.addEventListener('mousedown', function(e) {
                 e.preventDefault();
                 applyFormat('underline');
+            });
+        }
+        if (alignLeftBtn) {
+            alignLeftBtn.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                applyAlignment('left');
+            });
+        }
+        if (alignCenterBtn) {
+            alignCenterBtn.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                applyAlignment('center');
+            });
+        }
+        if (alignRightBtn) {
+            alignRightBtn.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                applyAlignment('right');
+            });
+        }
+        if (cellBgPicker) {
+            cellBgPicker.addEventListener('input', function(e) {
+                applyCellBackground(e.target.value);
             });
         }
 
