@@ -61,7 +61,7 @@
 
     function createEmptyCellStyles(r, c) {
         return Array(r).fill(null).map(() =>
-            Array(c).fill(null).map(() => ({ align: '', bg: '' }))
+            Array(c).fill(null).map(() => ({ align: '', bg: '', color: '' }))
         );
     }
 
@@ -465,7 +465,8 @@
                 if (cellStyle && typeof cellStyle === 'object') {
                     normalized[row][col] = {
                         align: normalizeAlignment(cellStyle.align),
-                        bg: typeof cellStyle.bg === 'string' ? cellStyle.bg : ''
+                        bg: typeof cellStyle.bg === 'string' ? cellStyle.bg : '',
+                        color: typeof cellStyle.color === 'string' ? cellStyle.color : ''
                     };
                 }
             }
@@ -676,6 +677,7 @@
                 const style = cellStyles[row][col];
                 if (style) {
                     contentDiv.style.textAlign = style.align || '';
+                    contentDiv.style.color = style.color || '';
                     if (style.bg) {
                         cell.style.setProperty('--cell-bg', style.bg);
                     } else {
@@ -683,6 +685,7 @@
                     }
                 } else {
                     contentDiv.style.textAlign = '';
+                    contentDiv.style.color = '';
                     cell.style.removeProperty('--cell-bg');
                 }
 
@@ -1387,7 +1390,7 @@
 
         const updated = forEachTargetCell(function(row, col) {
             if (!cellStyles[row]) cellStyles[row] = [];
-            if (!cellStyles[row][col]) cellStyles[row][col] = { align: '', bg: '' };
+            if (!cellStyles[row][col]) cellStyles[row][col] = { align: '', bg: '', color: '' };
             cellStyles[row][col].align = normalized;
 
             const cellContent = getCellContentElement(row, col);
@@ -1406,7 +1409,7 @@
 
         const updated = forEachTargetCell(function(row, col) {
             if (!cellStyles[row]) cellStyles[row] = [];
-            if (!cellStyles[row][col]) cellStyles[row][col] = { align: '', bg: '' };
+            if (!cellStyles[row][col]) cellStyles[row][col] = { align: '', bg: '', color: '' };
             cellStyles[row][col].bg = color;
 
             const cell = getCellElement(row, col);
@@ -1416,6 +1419,25 @@
                 } else {
                     cell.style.removeProperty('--cell-bg');
                 }
+            }
+        });
+
+        if (updated) {
+            debouncedUpdateURL();
+        }
+    }
+
+    function applyCellTextColor(color) {
+        if (typeof color !== 'string') return;
+
+        const updated = forEachTargetCell(function(row, col) {
+            if (!cellStyles[row]) cellStyles[row] = [];
+            if (!cellStyles[row][col]) cellStyles[row][col] = { align: '', bg: '', color: '' };
+            cellStyles[row][col].color = color;
+
+            const cellContent = getCellContentElement(row, col);
+            if (cellContent) {
+                cellContent.style.color = color;
             }
         });
 
@@ -1476,7 +1498,7 @@
         rows++;
         data.push(Array(cols).fill(''));
         formulas.push(Array(cols).fill(''));
-        cellStyles.push(Array(cols).fill(null).map(() => ({ align: '', bg: '' })));
+        cellStyles.push(Array(cols).fill(null).map(() => ({ align: '', bg: '', color: '' })));
         renderGrid();
         debouncedUpdateURL();
     }
@@ -1487,7 +1509,7 @@
         cols++;
         data.forEach(row => row.push(''));
         formulas.forEach(row => row.push(''));
-        cellStyles.forEach(row => row.push({ align: '', bg: '' }));
+        cellStyles.forEach(row => row.push({ align: '', bg: '', color: '' }));
         renderGrid();
         debouncedUpdateURL();
     }
@@ -1661,6 +1683,7 @@
         const alignCenterBtn = document.getElementById('align-center');
         const alignRightBtn = document.getElementById('align-right');
         const cellBgPicker = document.getElementById('cell-bg-color');
+        const cellTextColorPicker = document.getElementById('cell-text-color');
 
         if (boldBtn) {
             boldBtn.addEventListener('mousedown', function(e) {
@@ -1701,6 +1724,11 @@
         if (cellBgPicker) {
             cellBgPicker.addEventListener('input', function(e) {
                 applyCellBackground(e.target.value);
+            });
+        }
+        if (cellTextColorPicker) {
+            cellTextColorPicker.addEventListener('input', function(e) {
+                applyCellTextColor(e.target.value);
             });
         }
 
