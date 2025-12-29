@@ -13,6 +13,8 @@
     --accent-color: #4a90d9;
     --accent-hover: #3a7bc8;
     --cell-focus-shadow: rgba(74, 144, 217, 0.3);
+    --selection-bg: rgba(74, 144, 217, 0.15);
+    --selection-border: #4a90d9;
 }
 
 /* Dark mode colors */
@@ -30,6 +32,8 @@
     --accent-color: #5a9fe9;
     --accent-hover: #4a8fd9;
     --cell-focus-shadow: rgba(90, 159, 233, 0.3);
+    --selection-bg: rgba(90, 159, 233, 0.2);
+    --selection-border: #5a9fe9;
 }
 
 * {
@@ -351,6 +355,45 @@ body {
     box-shadow: 0 0 0 2px var(--cell-focus-shadow);
     z-index: 2;
     position: relative;
+}
+
+/* Multi-cell selection styles */
+.cell.cell-selected {
+    background-color: var(--selection-bg);
+    position: relative;
+    z-index: 1;
+}
+
+.cell.cell-selected .cell-content {
+    background-color: transparent;
+}
+
+/* Selection border outline (Google Sheets style) */
+.cell.cell-selected.selection-top {
+    border-top: 2px solid var(--selection-border);
+}
+
+.cell.cell-selected.selection-bottom {
+    border-bottom: 2px solid var(--selection-border);
+}
+
+.cell.cell-selected.selection-left {
+    border-left: 2px solid var(--selection-border);
+}
+
+.cell.cell-selected.selection-right {
+    border-right: 2px solid var(--selection-border);
+}
+
+/* Prevent text selection during drag */
+.spreadsheet.selecting {
+    user-select: none;
+    cursor: cell;
+}
+
+.spreadsheet.selecting .cell-content {
+    user-select: none;
+    pointer-events: none;
 }
 
 /* Footer hint */
