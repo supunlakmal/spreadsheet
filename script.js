@@ -193,14 +193,15 @@
                 const cell = document.createElement('div');
                 cell.className = 'cell';
 
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.dataset.row = row;
-                input.dataset.col = col;
-                input.value = data[row][col];
-                input.setAttribute('aria-label', `Cell ${colToLetter(col)}${row + 1}`);
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'cell-content';
+                contentDiv.contentEditable = 'true';
+                contentDiv.dataset.row = row;
+                contentDiv.dataset.col = col;
+                contentDiv.innerHTML = data[row][col];
+                contentDiv.setAttribute('aria-label', `Cell ${colToLetter(col)}${row + 1}`);
 
-                cell.appendChild(input);
+                cell.appendChild(contentDiv);
                 container.appendChild(cell);
             }
         }
@@ -210,14 +211,14 @@
 
     // Handle input changes
     function handleInput(event) {
-        const input = event.target;
-        if (input.tagName !== 'INPUT') return;
+        const target = event.target;
+        if (!target.classList.contains('cell-content')) return;
 
-        const row = parseInt(input.dataset.row, 10);
-        const col = parseInt(input.dataset.col, 10);
+        const row = parseInt(target.dataset.row, 10);
+        const col = parseInt(target.dataset.col, 10);
 
         if (!isNaN(row) && !isNaN(col) && row < rows && col < cols) {
-            data[row][col] = input.value;
+            data[row][col] = target.innerHTML;
             debouncedUpdateURL();
         }
     }
@@ -249,11 +250,11 @@
     }
 
     function handleFocusIn(event) {
-        const input = event.target;
-        if (input.tagName !== 'INPUT') return;
+        const target = event.target;
+        if (!target.classList.contains('cell-content')) return;
 
-        const row = parseInt(input.dataset.row, 10);
-        const col = parseInt(input.dataset.col, 10);
+        const row = parseInt(target.dataset.row, 10);
+        const col = parseInt(target.dataset.col, 10);
 
         if (!isNaN(row) && !isNaN(col)) {
             setActiveHeaders(row, col);
@@ -261,8 +262,8 @@
     }
 
     function handleFocusOut(event) {
-        const input = event.target;
-        if (input.tagName !== 'INPUT') return;
+        const target = event.target;
+        if (!target.classList.contains('cell-content')) return;
 
         const container = document.getElementById('spreadsheet');
         if (!container) return;
@@ -273,6 +274,31 @@
         }
 
         clearActiveHeaders();
+    }
+
+    // Apply text formatting using execCommand
+    function applyFormat(command) {
+        document.execCommand(command, false, null);
+        // Update data after formatting
+        const activeElement = document.activeElement;
+        if (activeElement && activeElement.classList.contains('cell-content')) {
+            const row = parseInt(activeElement.dataset.row, 10);
+            const col = parseInt(activeElement.dataset.col, 10);
+            if (!isNaN(row) && !isNaN(col) && row < rows && col < cols) {
+                data[row][col] = activeElement.innerHTML;
+                debouncedUpdateURL();
+            }
+        }
+    }
+
+    // Handle paste to strip unwanted HTML
+    function handlePaste(event) {
+        const target = event.target;
+        if (!target.classList.contains('cell-content')) return;
+
+        event.preventDefault();
+        const text = event.clipboardData.getData('text/plain');
+        document.execCommand('insertText', false, text);
     }
 
     // Add a new row
@@ -417,6 +443,31 @@
             container.addEventListener('input', handleInput);
             container.addEventListener('focusin', handleFocusIn);
             container.addEventListener('focusout', handleFocusOut);
+            container.addEventListener('paste', handlePaste);
+        }
+
+        // Format button event listeners
+        const boldBtn = document.getElementById('format-bold');
+        const italicBtn = document.getElementById('format-italic');
+        const underlineBtn = document.getElementById('format-underline');
+
+        if (boldBtn) {
+            boldBtn.addEventListener('mousedown', function(e) {
+                e.preventDefault(); // Prevent focus loss
+                applyFormat('bold');
+            });
+        }
+        if (italicBtn) {
+            italicBtn.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                applyFormat('italic');
+            });
+        }
+        if (underlineBtn) {
+            underlineBtn.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                applyFormat('underline');
+            });
         }
 
         // Button event listeners
