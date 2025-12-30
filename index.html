@@ -43,17 +43,15 @@
                             class="fa-solid fa-align-right"></i></button>
                 </div>
                 <div class="toolbar-divider"></div>
-                <div class="select-control" title="Font size">
-                    <i class="fa-solid fa-text-height"></i>
-                    <select id="font-size" aria-label="Font size">
-                        <option value="">Size</option>
-                        <option value="10">10</option>
-                        <option value="12">12</option>
-                        <option value="14">14</option>
-                        <option value="16">16</option>
-                        <option value="18">18</option>
-                        <option value="24">24</option>
-                    </select>
+                <div class="size-control" id="font-size-list" title="Font size" role="group" aria-label="Font size">
+                    <span class="size-control-label" aria-hidden="true"><i class="fa-solid fa-text-height"></i></span>
+                    <button type="button" class="size-option" data-size="" aria-label="Font size auto">Auto</button>
+                    <button type="button" class="size-option" data-size="10" aria-label="Font size 10">10</button>
+                    <button type="button" class="size-option" data-size="12" aria-label="Font size 12">12</button>
+                    <button type="button" class="size-option" data-size="14" aria-label="Font size 14">14</button>
+                    <button type="button" class="size-option" data-size="16" aria-label="Font size 16">16</button>
+                    <button type="button" class="size-option" data-size="18" aria-label="Font size 18">18</button>
+                    <button type="button" class="size-option" data-size="24" aria-label="Font size 24">24</button>
                 </div>
                 <div class="toolbar-divider"></div>
                 <div class="color-control" title="Cell background color">

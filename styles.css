@@ -16,6 +16,8 @@
     --selection-bg: rgba(74, 144, 217, 0.15);
     --selection-border: #4a90d9;
     --selection-grid: rgba(0, 0, 0, 0.12);
+    --hover-bg: rgba(74, 144, 217, 0.08);
+    --hover-header-bg: rgba(74, 144, 217, 0.14);
 }
 
 /* Dark mode colors */
@@ -36,6 +38,8 @@
     --selection-bg: rgba(90, 159, 233, 0.2);
     --selection-border: #5a9fe9;
     --selection-grid: rgba(255, 255, 255, 0.12);
+    --hover-bg: rgba(90, 159, 233, 0.12);
+    --hover-header-bg: rgba(90, 159, 233, 0.2);
 }
 
 * {
@@ -180,30 +184,45 @@ body {
     border-radius: 4px;
 }
 
-.select-control {
-    display: flex;
+.size-control {
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     padding: 2px 6px;
     border-radius: 4px;
     border: 1px solid var(--border-color);
     background: var(--bg-header);
 }
 
-.select-control i {
-    font-size: 0.8125rem;
+.size-control-label {
+    display: inline-flex;
+    align-items: center;
     color: var(--text-secondary);
+    font-size: 0.8125rem;
+    margin-right: 2px;
 }
 
-.select-control select {
-    min-width: 60px;
+.size-control-label i {
+    font-size: 0.8125rem;
+}
+
+.size-option {
     border: none;
     background: transparent;
-    color: var(--text-primary);
-    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
     font-family: inherit;
-    outline: none;
+    padding: 4px 6px;
+    border-radius: 3px;
     cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.size-option:hover,
+.size-option:focus-visible {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    outline: none;
 }
 
 .toolbar button {
@@ -360,6 +379,11 @@ body {
     color: var(--text-primary);
 }
 
+.header-cell.header-hover:not(.header-active) {
+    background-color: var(--hover-header-bg);
+    color: var(--text-primary);
+}
+
 /* Column headers stick to top */
 .header-cell.col-header {
     top: 0;
@@ -478,6 +502,11 @@ body {
 
 .cell.cell-selected .cell-content {
     background-color: transparent;
+}
+
+.cell.hover-row:not(.cell-selected),
+.cell.hover-col:not(.cell-selected) {
+    box-shadow: inset 0 0 0 9999px var(--hover-bg);
 }
 
 /* Selection border outline (Google Sheets style) */

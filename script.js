@@ -43,6 +43,8 @@
     let selectionStart = null;  // { row, col } anchor point
     let selectionEnd = null;    // { row, col } current end
     let isSelecting = false;    // true during mouse drag
+    let hoverRow = null;
+    let hoverCol = null;
 
     // Formula range selection mode (for clicking to select ranges like Google Sheets)
     let formulaEditMode = false;       // true when typing a formula
@@ -652,6 +654,8 @@
         selectionStart = null;
         selectionEnd = null;
         isSelecting = false;
+        hoverRow = null;
+        hoverCol = null;
 
         // Set dynamic grid columns
         container.style.gridTemplateColumns = `40px repeat(${cols}, minmax(80px, 1fr))`;
@@ -891,6 +895,136 @@
         setActiveHeadersForRange(minRow, maxRow, minCol, maxCol);
     }
 
+    function getCellContentFromTarget(target) {
+        if (!(target instanceof Element)) return null;
+
+        if (target.classList.contains('cell-content')) {
+            return target;
+        }
+        if (target.classList.contains('cell')) {
+            return target.querySelector('.cell-content');
+        }
+        return target.closest('.cell-content');
+    }
+
+    function addHoverRow(row) {
+        const container = document.getElementById('spreadsheet');
+        if (!container) return;
+
+        container.querySelectorAll(`.cell-content[data-row="${row}"]`).forEach(cellContent => {
+            if (cellContent.parentElement) {
+                cellContent.parentElement.classList.add('hover-row');
+            }
+        });
+
+        const rowHeader = container.querySelector(`.row-header[data-row="${row}"]`);
+        if (rowHeader) {
+            rowHeader.classList.add('header-hover');
+        }
+    }
+
+    function addHoverCol(col) {
+        const container = document.getElementById('spreadsheet');
+        if (!container) return;
+
+        container.querySelectorAll(`.cell-content[data-col="${col}"]`).forEach(cellContent => {
+            if (cellContent.parentElement) {
+                cellContent.parentElement.classList.add('hover-col');
+            }
+        });
+
+        const colHeader = container.querySelector(`.col-header[data-col="${col}"]`);
+        if (colHeader) {
+            colHeader.classList.add('header-hover');
+        }
+    }
+
+    function removeHoverRow(row) {
+        const container = document.getElementById('spreadsheet');
+        if (!container) return;
+
+        container.querySelectorAll(`.cell-content[data-row="${row}"]`).forEach(cellContent => {
+            if (cellContent.parentElement) {
+                cellContent.parentElement.classList.remove('hover-row');
+            }
+        });
+
+        const rowHeader = container.querySelector(`.row-header[data-row="${row}"]`);
+        if (rowHeader) {
+            rowHeader.classList.remove('header-hover');
+        }
+    }
+
+    function removeHoverCol(col) {
+        const container = document.getElementById('spreadsheet');
+        if (!container) return;
+
+        container.querySelectorAll(`.cell-content[data-col="${col}"]`).forEach(cellContent => {
+            if (cellContent.parentElement) {
+                cellContent.parentElement.classList.remove('hover-col');
+            }
+        });
+
+        const colHeader = container.querySelector(`.col-header[data-col="${col}"]`);
+        if (colHeader) {
+            colHeader.classList.remove('header-hover');
+        }
+    }
+
+    function clearHoverHighlights() {
+        if (hoverRow !== null) {
+            removeHoverRow(hoverRow);
+        }
+        if (hoverCol !== null) {
+            removeHoverCol(hoverCol);
+        }
+        hoverRow = null;
+        hoverCol = null;
+    }
+
+    function setHoverHighlight(row, col) {
+        if (row === hoverRow && col === hoverCol) return;
+
+        if (hoverRow !== null && hoverRow !== row) {
+            removeHoverRow(hoverRow);
+        }
+        if (hoverCol !== null && hoverCol !== col) {
+            removeHoverCol(hoverCol);
+        }
+
+        hoverRow = row;
+        hoverCol = col;
+
+        if (hoverRow !== null) {
+            addHoverRow(hoverRow);
+        }
+        if (hoverCol !== null) {
+            addHoverCol(hoverCol);
+        }
+    }
+
+    function updateHoverFromTarget(target) {
+        if (isSelecting || hasMultiSelection()) {
+            clearHoverHighlights();
+            return;
+        }
+
+        const cellContent = getCellContentFromTarget(target);
+        if (!cellContent || !cellContent.classList.contains('cell-content')) {
+            clearHoverHighlights();
+            return;
+        }
+
+        const row = parseInt(cellContent.dataset.row, 10);
+        const col = parseInt(cellContent.dataset.col, 10);
+        if (isNaN(row) || isNaN(col)) {
+            clearHoverHighlights();
+            return;
+        }
+
+        setHoverHighlight(row, col);
+    }
+
     // Get cell coordinates from screen point
     function getCellFromPoint(x, y) {
         const element = document.elementFromPoint(x, y);
@@ -1078,6 +1212,7 @@
                 formulaRangeStart = { row, col };
                 formulaRangeEnd = { row, col };
                 isSelecting = true;
+                clearHoverHighlights();
 
                 // Show visual selection
                 selectionStart = formulaRangeStart;
@@ -1104,6 +1239,7 @@
         selectionStart = { row, col };
         selectionEnd = { row, col };
         isSelecting = true;
+        clearHoverHighlights();
 
         if (container) {
             container.classList.add('selecting');
@@ -1113,7 +1249,10 @@
     }
 
     function handleMouseMove(event) {
-        if (!isSelecting) return;
+        if (!isSelecting) {
+            updateHoverFromTarget(event.target);
+            return;
+        }
 
         const cellCoords = getCellFromPoint(event.clientX, event.clientY);
         if (!cellCoords) return;
@@ -1137,6 +1276,10 @@
 
         // Prevent text selection during drag
         event.preventDefault();
+    }
+
+    function handleMouseLeave() {
+        clearHoverHighlights();
     }
 
     function handleMouseUp(event) {
@@ -1688,6 +1831,7 @@
             container.addEventListener('mousedown', handleMouseDown);
             container.addEventListener('dblclick', handleCellDoubleClick);
             container.addEventListener('mousemove', handleMouseMove);
+            container.addEventListener('mouseleave', handleMouseLeave);
             container.addEventListener('mouseup', handleMouseUp);
             container.addEventListener('keydown', handleSelectionKeyDown);
 
@@ -1724,7 +1868,7 @@
         const alignRightBtn = document.getElementById('align-right');
         const cellBgPicker = document.getElementById('cell-bg-color');
         const cellTextColorPicker = document.getElementById('cell-text-color');
-        const fontSizeSelect = document.getElementById('font-size');
+        const fontSizeList = document.getElementById('font-size-list');
 
         if (boldBtn) {
             boldBtn.addEventListener('mousedown', function(e) {
@@ -1772,9 +1916,16 @@
                 applyCellTextColor(e.target.value);
             });
         }
-        if (fontSizeSelect) {
-            fontSizeSelect.addEventListener('change', function(e) {
-                applyFontSize(e.target.value);
+        if (fontSizeList) {
+            fontSizeList.addEventListener('mousedown', function(e) {
+                if (e.target.closest('button')) {
+                    e.preventDefault();
+                }
+            });
+            fontSizeList.addEventListener('click', function(e) {
+                const button = e.target.closest('button[data-size]');
+                if (!button) return;
+                applyFontSize(button.dataset.size);
             });
         }
 
