@@ -9,6 +9,13 @@
     const MAX_COLS = 15;
     const DEBOUNCE_DELAY = 200;
     const ACTIVE_HEADER_CLASS = 'header-active';
+    const ROW_HEADER_WIDTH = 40;
+    const HEADER_ROW_HEIGHT = 32;
+    const DEFAULT_COL_WIDTH = 100;
+    const MIN_COL_WIDTH = 80;
+    const IS_MOBILE_LAYOUT = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+    const DEFAULT_ROW_HEIGHT = IS_MOBILE_LAYOUT ? 44 : 32;
+    const MIN_ROW_HEIGHT = DEFAULT_ROW_HEIGHT;
 
     // Default starting size
     const DEFAULT_ROWS = 10;
@@ -31,6 +38,8 @@
 
     // Cell styles - alignment, colors, and font size
     let cellStyles = createEmptyCellStyles(rows, cols);
+    let colWidths = createDefaultColumnWidths(cols);
+    let rowHeights = createDefaultRowHeights(rows);
 
     // Debounce timer
     let debounceTimer = null;
@@ -56,6 +65,7 @@
     let formulaDropdownIndex = -1;     // Active item index
     let formulaDropdownAnchor = null;  // Cell element used for positioning
     let editingCell = null;            // { row, col } when editing a cell's text
+    let resizeState = null;            // { type, index, startX, startY, startSize }
 
     // Create empty data array with specified dimensions
     function createEmptyData(r, c) {
@@ -70,6 +80,42 @@
         return Array(r).fill(null).map(() =>
             Array(c).fill(null).map(() => createEmptyCellStyle())
         );
+    }
+
+    function createDefaultColumnWidths(count) {
+        return Array(count).fill(DEFAULT_COL_WIDTH);
+    }
+
+    function createDefaultRowHeights(count) {
+        return Array(count).fill(DEFAULT_ROW_HEIGHT);
+    }
+
+    function normalizeColumnWidths(widths, count) {
+        const normalized = [];
+        for (let i = 0; i < count; i++) {
+            const raw = widths && widths[i];
+            const value = parseInt(raw, 10);
+            if (Number.isFinite(value) && value > 0) {
+                normalized.push(Math.max(MIN_COL_WIDTH, value));
+            } else {
+                normalized.push(DEFAULT_COL_WIDTH);
+            }
+        }
+        return normalized;
+    }
+
+    function normalizeRowHeights(heights, count) {
+        const normalized = [];
+        for (let i = 0; i < count; i++) {
+            const raw = heights && heights[i];
+            const value = parseInt(raw, 10);
+            if (Number.isFinite(value) && value > 0) {
+                normalized.push(Math.max(MIN_ROW_HEIGHT, value));
+            } else {
+                normalized.push(DEFAULT_ROW_HEIGHT);
+            }
+        }
+        return normalized;
     }
 
     // Convert column index to letter (0 = A, 1 = B, ... 25 = Z)
@@ -621,6 +667,8 @@
         data = createEmptyData(rows, cols);
         formulas = createEmptyData(rows, cols);
         cellStyles = createEmptyCellStyles(rows, cols);
+        colWidths = createDefaultColumnWidths(cols);
+        rowHeights = createDefaultRowHeights(rows);
 
         for (let r = 0; r < rows; r++) {
             const sourceRow = Array.isArray(parsedRows[r]) ? parsedRows[r] : [];
@@ -652,6 +700,8 @@
             data,
             formulas,
             cellStyles,
+            colWidths,
+            rowHeights,
             theme: isDarkMode() ? 'dark' : 'light'
         };
         const json = JSON.stringify(state);
@@ -713,12 +763,16 @@
                 }
 
                 const s = normalizeCellStyles(parsed.cellStyles, r, c);
+                const w = normalizeColumnWidths(parsed.colWidths, c);
+                const h = normalizeRowHeights(parsed.rowHeights, r);
                 return {
                     rows: r,
                     cols: c,
                     data: d,
                     formulas: f,
                     cellStyles: s,
+                    colWidths: w,
+                    rowHeights: h,
                     theme: parsed.theme || null
                 };
             }
@@ -736,7 +790,18 @@
                 }
                 const f = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
                 const s = createEmptyCellStyles(DEFAULT_ROWS, DEFAULT_COLS);
-                return { rows: DEFAULT_ROWS, cols: DEFAULT_COLS, data: d, formulas: f, cellStyles: s, theme: null };
+                const w = createDefaultColumnWidths(DEFAULT_COLS);
+                const h = createDefaultRowHeights(DEFAULT_ROWS);
+                return {
+                    rows: DEFAULT_ROWS,
+                    cols: DEFAULT_COLS,
+                    data: d,
+                    formulas: f,
+                    cellStyles: s,
+                    colWidths: w,
+                    rowHeights: h,
+                    theme: null
+                };
             }
         } catch (e) {
             console.warn('Failed to decode state from URL:', e);
@@ -794,6 +859,17 @@
         }
     }
 
+    function applyGridTemplate() {
+        const container = document.getElementById('spreadsheet');
+        if (!container) return;
+
+        const columnSizes = colWidths.map(width => `${width}px`).join(' ');
+        const rowSizes = rowHeights.map(height => `${height}px`).join(' ');
+
+        container.style.gridTemplateColumns = `${ROW_HEADER_WIDTH}px ${columnSizes}`;
+        container.style.gridTemplateRows = `${HEADER_ROW_HEIGHT}px ${rowSizes}`;
+    }
+
     // Render the spreadsheet grid
     function renderGrid() {
         const container = document.getElementById('spreadsheet');
@@ -806,9 +882,8 @@
         hoverRow = null;
         hoverCol = null;
 
-        // Set dynamic grid columns
-        container.style.gridTemplateColumns = `40px repeat(${cols}, minmax(80px, 1fr))`;
         container.innerHTML = '';
+        applyGridTemplate();
 
         // Corner cell (empty)
         const corner = document.createElement('div');
@@ -821,6 +896,11 @@
             header.className = 'header-cell col-header';
             header.textContent = colToLetter(col);
             header.dataset.col = col;
+            const colResize = document.createElement('div');
+            colResize.className = 'resize-handle col-resize';
+            colResize.dataset.col = col;
+            colResize.setAttribute('aria-hidden', 'true');
+            header.appendChild(colResize);
             container.appendChild(header);
         }
 
@@ -831,6 +911,11 @@
             rowHeader.className = 'header-cell row-header';
             rowHeader.textContent = row + 1;
             rowHeader.dataset.row = row;
+            const rowResize = document.createElement('div');
+            rowResize.className = 'resize-handle row-resize';
+            rowResize.dataset.row = row;
+            rowResize.setAttribute('aria-hidden', 'true');
+            rowHeader.appendChild(rowResize);
             container.appendChild(rowHeader);
 
             // Data cells
@@ -1599,6 +1684,68 @@
         }
     }
 
+    // ========== Column/Row Resize Handlers ==========
+
+    function handleResizeStart(event) {
+        if (event.button !== 0) return;
+        if (!(event.target instanceof Element)) return;
+
+        const handle = event.target.closest('.resize-handle');
+        if (!handle) return;
+
+        const isColResize = handle.classList.contains('col-resize');
+        const indexValue = isColResize ? handle.dataset.col : handle.dataset.row;
+        const index = parseInt(indexValue, 10);
+        if (isNaN(index)) return;
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        resizeState = {
+            type: isColResize ? 'col' : 'row',
+            index,
+            startX: event.clientX,
+            startY: event.clientY,
+            startSize: isColResize
+                ? (colWidths[index] || DEFAULT_COL_WIDTH)
+                : (rowHeights[index] || DEFAULT_ROW_HEIGHT)
+        };
+
+        isSelecting = false;
+        document.body.classList.add('resizing');
+        document.body.style.cursor = isColResize ? 'col-resize' : 'row-resize';
+
+        document.addEventListener('mousemove', handleResizeMove);
+        document.addEventListener('mouseup', handleResizeEnd);
+    }
+
+    function handleResizeMove(event) {
+        if (!resizeState) return;
+
+        if (resizeState.type === 'col') {
+            const delta = event.clientX - resizeState.startX;
+            const nextWidth = Math.max(MIN_COL_WIDTH, resizeState.startSize + delta);
+            colWidths[resizeState.index] = nextWidth;
+        } else {
+            const delta = event.clientY - resizeState.startY;
+            const nextHeight = Math.max(MIN_ROW_HEIGHT, resizeState.startSize + delta);
+            rowHeights[resizeState.index] = nextHeight;
+        }
+
+        applyGridTemplate();
+    }
+
+    function handleResizeEnd() {
+        if (!resizeState) return;
+
+        document.removeEventListener('mousemove', handleResizeMove);
+        document.removeEventListener('mouseup', handleResizeEnd);
+        document.body.classList.remove('resizing');
+        document.body.style.cursor = '';
+        resizeState = null;
+        debouncedUpdateURL();
+    }
+
     // ========== Touch Selection Handlers ==========
 
     function handleTouchStart(event) {
@@ -1815,6 +1962,8 @@
         data = createEmptyData(rows, cols);
         formulas = createEmptyData(rows, cols);
         cellStyles = createEmptyCellStyles(rows, cols);
+        colWidths = createDefaultColumnWidths(cols);
+        rowHeights = createDefaultRowHeights(rows);
 
         // Clear any selection
         clearSelection();
@@ -1831,6 +1980,7 @@
         data.push(Array(cols).fill(''));
         formulas.push(Array(cols).fill(''));
         cellStyles.push(Array(cols).fill(null).map(() => createEmptyCellStyle()));
+        rowHeights.push(DEFAULT_ROW_HEIGHT);
         renderGrid();
         debouncedUpdateURL();
     }
@@ -1842,6 +1992,7 @@
         data.forEach(row => row.push(''));
         formulas.forEach(row => row.push(''));
         cellStyles.forEach(row => row.push(createEmptyCellStyle()));
+        colWidths.push(DEFAULT_COL_WIDTH);
         renderGrid();
         debouncedUpdateURL();
     }
@@ -1858,6 +2009,8 @@
                 data = loadedState.data;
                 formulas = loadedState.formulas || createEmptyData(rows, cols);
                 cellStyles = loadedState.cellStyles || createEmptyCellStyles(rows, cols);
+                colWidths = loadedState.colWidths || createDefaultColumnWidths(cols);
+                rowHeights = loadedState.rowHeights || createDefaultRowHeights(rows);
 
                 // Apply theme from URL if present
                 if (loadedState.theme) {
@@ -1873,6 +2026,8 @@
         data = createEmptyData(rows, cols);
         cellStyles = createEmptyCellStyles(rows, cols);
         formulas = createEmptyData(rows, cols);
+        colWidths = createDefaultColumnWidths(cols);
+        rowHeights = createDefaultRowHeights(rows);
     }
 
     // Toggle dark/light mode
@@ -1977,6 +2132,7 @@
             container.addEventListener('paste', handlePaste);
 
             // Selection mouse events
+            container.addEventListener('mousedown', handleResizeStart);
             container.addEventListener('mousedown', handleMouseDown);
             container.addEventListener('dblclick', handleCellDoubleClick);
             container.addEventListener('mousemove', handleMouseMove);
