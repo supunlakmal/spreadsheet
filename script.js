@@ -692,18 +692,73 @@
         }
     }
 
+    // Check if all cells in data array are empty
+    function isDataEmpty(d) {
+        return d.every(row => row.every(cell => cell === ''));
+    }
+
+    // Check if all cells in formulas array are empty
+    function isFormulasEmpty(f) {
+        return f.every(row => row.every(cell => cell === ''));
+    }
+
+    // Check if a cell style is default (all empty)
+    function isCellStyleDefault(style) {
+        return !style || (style.align === '' && style.bg === '' &&
+                          style.color === '' && style.fontSize === '');
+    }
+
+    // Check if all cell styles are default
+    function isCellStylesDefault(styles) {
+        return styles.every(row => row.every(cell => isCellStyleDefault(cell)));
+    }
+
+    // Check if column widths are all default
+    function isColWidthsDefault(widths, count) {
+        if (widths.length !== count) return false;
+        return widths.every(w => w === DEFAULT_COL_WIDTH);
+    }
+
+    // Check if row heights are all default
+    function isRowHeightsDefault(heights, count) {
+        if (heights.length !== count) return false;
+        return heights.every(h => h === DEFAULT_ROW_HEIGHT);
+    }
+
     // Encode state to URL-safe string (includes dimensions and theme)
+    // Only includes non-empty/non-default values to minimize URL length
     function encodeState() {
         const state = {
             rows,
             cols,
-            data,
-            formulas,
-            cellStyles,
-            colWidths,
-            rowHeights,
             theme: isDarkMode() ? 'dark' : 'light'
         };
+
+        // Only include data if not all empty
+        if (!isDataEmpty(data)) {
+            state.data = data;
+        }
+
+        // Only include formulas if any exist
+        if (!isFormulasEmpty(formulas)) {
+            state.formulas = formulas;
+        }
+
+        // Only include cell styles if any are non-default
+        if (!isCellStylesDefault(cellStyles)) {
+            state.cellStyles = cellStyles;
+        }
+
+        // Only include colWidths if not all default
+        if (!isColWidthsDefault(colWidths, cols)) {
+            state.colWidths = colWidths;
+        }
+
+        // Only include rowHeights if not all default
+        if (!isRowHeightsDefault(rowHeights, rows)) {
+            state.rowHeights = rowHeights;
+        }
+
         const json = JSON.stringify(state);
         return encodeURIComponent(json);
     }
