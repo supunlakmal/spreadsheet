@@ -495,6 +495,49 @@
         return normalized;
     }
 
+    function extractPlainText(value) {
+        if (value === null || value === undefined) return '';
+        const temp = document.createElement('div');
+        temp.innerHTML = String(value);
+        const text = temp.textContent || '';
+        return text.replace(/\u00a0/g, ' ');
+    }
+
+    function csvEscape(value) {
+        const text = String(value);
+        const needsQuotes = /[",\r\n]/.test(text) || /^\s|\s$/.test(text);
+        const escaped = text.replace(/"/g, '""');
+        return needsQuotes ? `"${escaped}"` : escaped;
+    }
+
+    function buildCSV() {
+        const lines = [];
+        for (let r = 0; r < rows; r++) {
+            const rowValues = [];
+            for (let c = 0; c < cols; c++) {
+                const raw = data[r][c];
+                const text = extractPlainText(raw);
+                rowValues.push(csvEscape(text));
+            }
+            lines.push(rowValues.join(','));
+        }
+        return lines.join('\r\n');
+    }
+
+    function downloadCSV() {
+        recalculateFormulas();
+        const csv = buildCSV();
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'spreadsheet.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
     // Encode state to URL-safe string (includes dimensions and theme)
     function encodeState() {
         const state = {
@@ -1935,6 +1978,7 @@
         const clearBtn = document.getElementById('clear-spreadsheet');
         const themeToggleBtn = document.getElementById('theme-toggle');
         const copyUrlBtn = document.getElementById('copy-url');
+        const exportCsvBtn = document.getElementById('export-csv');
 
         if (addRowBtn) {
             addRowBtn.addEventListener('click', addRow);
@@ -1950,6 +1994,9 @@
         }
         if (copyUrlBtn) {
             copyUrlBtn.addEventListener('click', copyURL);
+        }
+        if (exportCsvBtn) {
+            exportCsvBtn.addEventListener('click', downloadCSV);
         }
 
         // Handle browser back/forward
