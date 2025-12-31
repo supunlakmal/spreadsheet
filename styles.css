@@ -564,22 +564,86 @@ body.resizing {
     pointer-events: none;
 }
 
-/* Footer hint */
-.hint {
-    padding: 8px 16px;
-    color: var(--text-muted);
-    font-size: 0.75rem;
+/* Status bar (bottom) */
+.status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 16px;
     background: var(--bg-hint);
     border-top: 1px solid var(--border-color);
+    font-size: 0.75rem;
+    color: var(--text-muted);
     flex-shrink: 0;
     transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+}
+
+.status-hint {
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-.hint i {
+.status-hint i {
     opacity: 0.7;
+}
+
+.url-length-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.url-length-label {
+    white-space: nowrap;
+}
+
+.url-progress-container {
+    width: 100px;
+    height: 6px;
+    background: var(--border-color);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.url-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--accent-color);
+    border-radius: 3px;
+    transition: width 0.3s, background-color 0.3s;
+}
+
+/* Progress bar color states */
+.url-progress-bar.warning {
+    background: #f0ad4e;
+}
+
+.url-progress-bar.caution {
+    background: #fd7e14;
+}
+
+.url-progress-bar.critical {
+    background: #dc3545;
+}
+
+/* URL length warning message */
+.url-length-message {
+    font-size: 0.7rem;
+    margin-left: 4px;
+    white-space: nowrap;
+}
+
+.url-length-message.warning {
+    color: #f0ad4e;
+}
+
+.url-length-message.caution {
+    color: #fd7e14;
+}
+
+.url-length-message.critical {
+    color: #dc3545;
 }
 
 /* Mobile/Tablet: Bottom toolbar with horizontal scroll */
@@ -644,8 +708,8 @@ body.resizing {
         margin-bottom: 70px;
     }
 
-    /* Hide hint on mobile/tablet */
-    .hint {
+    /* Hide status bar on mobile/tablet */
+    .status-bar {
         display: none;
     }
 }

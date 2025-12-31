@@ -20,6 +20,13 @@
     // Default starting size
     const DEFAULT_ROWS = 10;
     const DEFAULT_COLS = 10;
+
+    // URL length thresholds for warnings
+    const URL_LENGTH_WARNING = 2000;   // Yellow - some older browsers may truncate
+    const URL_LENGTH_CAUTION = 4000;   // Orange - URL shorteners may fail
+    const URL_LENGTH_CRITICAL = 8000;  // Red - some browsers may fail
+    const URL_LENGTH_MAX_DISPLAY = 10000; // For progress bar scaling
+
     const FORMULA_SUGGESTIONS = [
         { name: 'SUM', signature: 'SUM(range)', description: 'Adds numbers in a range' },
         { name: 'AVG', signature: 'AVG(range)', description: 'Average of numbers in a range' }
@@ -1502,10 +1509,54 @@
         } catch (e) {}
     }
 
+    // Update URL length indicator in status bar
+    function updateURLLengthIndicator(length) {
+        const valueEl = document.getElementById('url-length-value');
+        const barEl = document.getElementById('url-progress-bar');
+        const msgEl = document.getElementById('url-length-message');
+        if (!valueEl || !barEl) return;
+
+        valueEl.textContent = length.toLocaleString();
+
+        // Calculate progress percentage (capped at 100%)
+        const percent = Math.min((length / URL_LENGTH_MAX_DISPLAY) * 100, 100);
+        barEl.style.width = percent + '%';
+
+        // Update color and message based on thresholds
+        barEl.classList.remove('warning', 'caution', 'critical');
+        if (msgEl) {
+            msgEl.classList.remove('warning', 'caution', 'critical');
+            msgEl.textContent = '';
+        }
+
+        if (length >= URL_LENGTH_CRITICAL) {
+            barEl.classList.add('critical');
+            if (msgEl) {
+                msgEl.classList.add('critical');
+                msgEl.textContent = 'Some browsers may fail';
+            }
+        } else if (length >= URL_LENGTH_CAUTION) {
+            barEl.classList.add('caution');
+            if (msgEl) {
+                msgEl.classList.add('caution');
+                msgEl.textContent = 'URL shorteners may fail';
+            }
+        } else if (length >= URL_LENGTH_WARNING) {
+            barEl.classList.add('warning');
+            if (msgEl) {
+                msgEl.classList.add('warning');
+                msgEl.textContent = 'Some older browsers may truncate';
+            }
+        }
+    }
+
     // Update URL hash without page jump
     async function updateURL() {
         const encoded = await encodeState();
         const newHash = '#' + encoded;
+
+        // Update URL length indicator
+        updateURLLengthIndicator(encoded.length);
 
         if (history.replaceState) {
             history.replaceState(null, null, newHash);
@@ -3128,6 +3179,10 @@
         // Update lock button UI state
         updateLockButtonUI();
 
+        // Initialize URL length indicator with current hash length
+        const currentHash = window.location.hash.slice(1);
+        updateURLLengthIndicator(currentHash.length);
+
         // Set up event delegation for input handling
         const container = document.getElementById('spreadsheet');
         if (container) {
@@ -3350,4 +3405,73 @@
     } else {
         init();
     }
+
+    // Expose audit function globally for testing URL sizes
+    window.auditURLSize = async function() {
+        const scenarios = [
+            { name: 'Empty 30x15', rows: 30, cols: 15, fill: null },
+            { name: 'Short text (A1, B1...)', rows: 30, cols: 15, fill: 'coords' },
+            { name: 'Medium text (10 chars)', rows: 30, cols: 15, fill: 'medium' },
+            { name: 'Numbers only', rows: 30, cols: 15, fill: 'numbers' },
+            { name: 'With formulas', rows: 30, cols: 15, fill: 'formulas' }
+        ];
+
+        console.log('=== URL Size Audit ===');
+        console.log('Max grid: 30 rows x 15 cols = 450 cells\n');
+
+        for (const scenario of scenarios) {
+            const testData = [];
+            for (let r = 0; r < scenario.rows; r++) {
+                const row = [];
+                for (let c = 0; c < scenario.cols; c++) {
+                    const colLetter = String.fromCharCode(65 + c);
+                    const cellRef = colLetter + (r + 1);
+                    switch (scenario.fill) {
+                        case 'coords':
+                            row.push(cellRef);
+                            break;
+                        case 'medium':
+                            row.push('Text_' + cellRef.padEnd(5, 'X'));
+                            break;
+                        case 'numbers':
+                            row.push(String(Math.floor(Math.random() * 10000)));
+                            break;
+                        case 'formulas':
+                            // Only put formulas in some cells to simulate realistic usage
+                            if (r > 0 && c === 0) {
+                                row.push('=SUM(B' + (r + 1) + ':O' + (r + 1) + ')');
+                            } else {
+                                row.push(String(Math.floor(Math.random() * 100)));
+                            }
+                            break;
+                        default:
+                            row.push('');
+                    }
+                }
+                testData.push(row);
+            }
+
+            const state = {
+                rows: scenario.rows,
+                cols: scenario.cols,
+                theme: 'light',
+                data: testData
+            };
+
+            const json = JSON.stringify(state);
+            const compressed = LZString.compressToEncodedURIComponent(json);
+
+            console.log(`${scenario.name}:`);
+            console.log(`  JSON size: ${json.length.toLocaleString()} chars`);
+            console.log(`  Compressed: ${compressed.length.toLocaleString()} chars`);
+            console.log(`  Compression ratio: ${((1 - compressed.length / json.length) * 100).toFixed(1)}%`);
+            console.log('');
+        }
+
+        console.log('=== Thresholds ===');
+        console.log('< 2,000 chars: OK (safe for all browsers)');
+        console.log('2,000-4,000: Warning (some older browsers may truncate)');
+        console.log('4,000-8,000: Caution (URL shorteners may fail)');
+        console.log('> 8,000: Critical (some browsers may fail)');
+    };
 })();
