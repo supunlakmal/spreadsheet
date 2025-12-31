@@ -11,7 +11,7 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 ## Features
 
 ### Core Functionality
-- **Zero Backend** - All state saved in URL hash, works completely offline
+- **Client-only** - All state saved in URL hash; no backend required
 - **Compressed URL State** - LZ-String compression keeps share links short
 - **Instant Sharing** - Copy URL to share your spreadsheet with anyone
 - **Dynamic Grid** - Expandable up to 30 rows and 15 columns (A-O)
@@ -26,7 +26,7 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 - **Font Size** - Quick size buttons (Auto, 10-24px)
 - **Cell Colors** - Background and text color pickers
 - **Style Persistence** - Alignment, colors, and sizes saved in the URL
-- HTML-based formatting preserved in cell content
+- Sanitized formatting preserved in cell content (B/I/U/STRONG/EM/SPAN with safe styles)
 
 ### Multi-Cell Selection (Google Sheets Style)
 - **Click & Drag** - Select rectangular ranges by dragging
@@ -35,19 +35,20 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 - **Visual Feedback** - Selected cells highlighted with blue background
 - **Border Outline** - Blue border around selection edges
 - **Header Highlighting** - Row/column headers highlight for selected range
+- **Hover Highlighting** - Row/column hover highlights for quick scanning
 - **Escape to Clear** - Press Escape to deselect
 
 ### Grid Management
 - **Add Row** - Expand grid rows (max 30)
 - **Add Column** - Expand grid columns (max 15)
 - **Resize Rows/Columns** - Drag header handles to adjust sizes
-- **Clear Spreadsheet** - Reset to empty 10A-10 grid with confirmation
+- **Clear Spreadsheet** - Reset to empty 10x10 grid with confirmation
 - **Live Grid Size** - Display shows current dimensions
 
 ### Data Import/Export
 - **CSV Import** - Load .csv files from the toolbar
 - **CSV Export** - Download the current grid as `spreadsheet.csv`
-- **Formula-aware Import** - Cells starting with `=` are treated as formulas
+- **Formula-aware Import** - SUM/AVG formulas are preserved; unsupported formulas are imported as text
 
 ### Formula Support
 - **SUM / AVG Functions** - Calculate totals or averages with `=SUM(A1:B5)` / `=AVG(A1:B5)`
@@ -76,6 +77,14 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 - **Tooltips** - Descriptive hints on all controls
 - **Focus Management** - Proper focus handling
 
+### Security & Privacy
+- **HTML Sanitization** - DOMParser-based whitelist for tags and safe styles
+- **Formula Validation** - Only SUM/AVG range syntax is accepted in formulas
+- **Safe URL Parsing** - Prototype pollution guards and hash length checks
+- **Style Guardrails** - CSS color validation for user-provided styles
+- **Content Security Policy** - CSP restricts scripts/styles/imgs/fonts to trusted sources
+- **Analytics Hygiene** - URL hash excluded from Google Analytics page tracking
+
 ## Quick Start
 
 Open `index.html` directly in your browser, or use a local server:
@@ -103,7 +112,7 @@ Example state (decompressed):
 }
 ```
 
-When you edit cells, the URL updates automatically (debounced at 200ms). Formulas are stored separately from displayed values, so both the results and the original formulas are preserved. Column widths, row heights, and cell styles are saved too. Legacy uncompressed hashes are still supported.
+When you edit cells, the URL updates automatically (debounced at 200ms). Formulas are stored separately from displayed values, so both the results and the original formulas are preserved. Column widths, row heights, and cell styles are saved too. Incoming URL state is sanitized and validated (DOMParser whitelist, formula regex, safe JSON parsing), and oversized hashes are rejected. Legacy uncompressed hashes are still supported.
 
 ## Usage
 
@@ -182,6 +191,7 @@ spreadsheet/
 |-- styles.css      # All styling including dark mode
 |-- script.js       # Application logic (IIFE module)
 |-- logo.png        # App logo
+|-- favicon.png     # Browser favicon
 |-- CLAUDE.md       # Development documentation
 `-- README.md       # This file
 ```
@@ -208,12 +218,11 @@ http://localhost:3000
 
 ## Recent Updates
 
-### Latest - Styling, CSV, and Compression
-- Added cell alignment, font sizing, and color controls (saved in URL)
-- Added column/row resizing with persistent sizes
-- Added CSV import/export (formulas recognized on import)
-- Added AVG formula support alongside SUM
-- URL hashes now use LZ-String compression with legacy fallback
+### Latest - Security Hardening and UX Polish
+- Added DOMParser-based sanitization with content safety checks
+- Validated formulas (SUM/AVG range syntax) and safe CSV import handling
+- Added CSP and SRI for external scripts/styles
+- Added favicon and ensured analytics excludes URL hash data
 
 ### v1.4 - Keyboard Navigation
 - Arrow keys move the active selection without entering edit mode
