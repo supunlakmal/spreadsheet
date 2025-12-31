@@ -668,3 +668,154 @@ body.resizing {
         font-size: 16px; /* Prevents zoom on iOS */
     }
 }
+
+/* ========== Password Modal Styles ========== */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+}
+
+.modal-content {
+    position: relative;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+}
+
+.modal-content h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.modal-content p {
+    margin: 0 0 20px 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.modal-form input {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 0.9375rem;
+    font-family: inherit;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.modal-form input:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px var(--cell-focus-shadow);
+}
+
+.modal-form input::placeholder {
+    color: var(--text-muted);
+}
+
+.modal-error {
+    margin: 0 0 16px 0;
+    padding: 10px 12px;
+    font-size: 0.8125rem;
+    color: #dc2626;
+    background: rgba(220, 38, 38, 0.1);
+    border-radius: 6px;
+    border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.modal-error.hidden {
+    display: none;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.modal-btn {
+    padding: 10px 20px;
+    font-size: 0.875rem;
+    font-family: inherit;
+    font-weight: 500;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.modal-btn:active {
+    transform: scale(0.98);
+}
+
+.modal-btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.modal-btn-secondary:hover {
+    background: var(--bg-header);
+    color: var(--text-primary);
+}
+
+.modal-btn-primary {
+    background: var(--accent-color);
+    border: none;
+    color: white;
+}
+
+.modal-btn-primary:hover {
+    background: var(--accent-hover);
+}
+
+.modal-btn-primary:disabled {
+    background: var(--text-muted);
+    cursor: not-allowed;
+}
+
+/* Lock button states */
+.lock-btn.locked {
+    color: var(--accent-color) !important;
+    border-color: var(--accent-color) !important;
+}
+
+.lock-btn.locked i::before {
+    content: "\f023"; /* fa-lock */
+}

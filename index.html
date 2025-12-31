@@ -100,6 +100,9 @@
                 <button id="export-csv" type="button" class="copy-btn" title="Download CSV">
                     <i class="fa-solid fa-file-csv"></i>
                 </button>
+                <button id="lock-btn" type="button" class="copy-btn lock-btn" title="Password Protection">
+                    <i class="fa-solid fa-lock-open"></i>
+                </button>
                 <a href="https://github.com/supunlakmal/spreadsheet" target="_blank" rel="noopener noreferrer"
                     class="github-link" title="View on GitHub">
                     <i class="fa-brands fa-github"></i>
@@ -112,6 +115,25 @@
         <div class="hint"><i class="fa-solid fa-link"></i> Data is saved in the URL - share the link to share your
             spreadsheet</div>
     </div>
+
+    <!-- Password Modal -->
+    <div id="password-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3 id="modal-title">Set Password</h3>
+            <p id="modal-description">Enter a password to encrypt this spreadsheet. Anyone with the link will need this password to view it.</p>
+            <div class="modal-form">
+                <input type="password" id="password-input" placeholder="Enter password" autocomplete="new-password">
+                <input type="password" id="password-confirm" placeholder="Confirm password" autocomplete="new-password">
+            </div>
+            <p id="modal-error" class="modal-error hidden"></p>
+            <div class="modal-buttons">
+                <button id="modal-cancel" type="button" class="modal-btn modal-btn-secondary">Cancel</button>
+                <button id="modal-submit" type="button" class="modal-btn modal-btn-primary">Set Password</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js" integrity="sha512-qtX0GLM3qX8rxJN1gyDfcnMFFrKvixfoEOwbBib9VafR5vbChV5LeE5wSI/x+IlCkTY5ZFddFDCCfaVJJNnuKQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="script.js"></script>
 </body>

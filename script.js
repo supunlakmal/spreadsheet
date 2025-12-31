@@ -49,6 +49,103 @@
     }
     const FONT_SIZE_OPTIONS = [10, 12, 14, 16, 18, 24];
 
+    // ========== Encryption Module (AES-GCM 256-bit) ==========
+    const CryptoUtils = {
+        algo: { name: 'AES-GCM', length: 256 },
+        kdf: { name: 'PBKDF2', hash: 'SHA-256', iterations: 100000 },
+
+        // Derive a cryptographic key from a password using PBKDF2
+        async deriveKey(password, salt) {
+            const enc = new TextEncoder();
+            const keyMaterial = await window.crypto.subtle.importKey(
+                'raw',
+                enc.encode(password),
+                'PBKDF2',
+                false,
+                ['deriveKey']
+            );
+            return window.crypto.subtle.deriveKey(
+                { ...this.kdf, salt: salt },
+                keyMaterial,
+                this.algo,
+                false,
+                ['encrypt', 'decrypt']
+            );
+        },
+
+        // Encrypt data string with password, returns Base64 string
+        async encrypt(dataString, password) {
+            const enc = new TextEncoder();
+            const salt = window.crypto.getRandomValues(new Uint8Array(16));
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+
+            const key = await this.deriveKey(password, salt);
+            const encodedData = enc.encode(dataString);
+
+            const encryptedContent = await window.crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv: iv },
+                key,
+                encodedData
+            );
+
+            // Pack: Salt (16) + IV (12) + EncryptedData
+            const buffer = new Uint8Array(salt.byteLength + iv.byteLength + encryptedContent.byteLength);
+            buffer.set(salt, 0);
+            buffer.set(iv, salt.byteLength);
+            buffer.set(new Uint8Array(encryptedContent), salt.byteLength + iv.byteLength);
+
+            return this.bufferToBase64(buffer);
+        },
+
+        // Decrypt Base64 string with password, returns original data string
+        async decrypt(base64String, password) {
+            const buffer = this.base64ToBuffer(base64String);
+
+            // Extract: Salt (16) + IV (12) + EncryptedData
+            const salt = buffer.slice(0, 16);
+            const iv = buffer.slice(16, 28);
+            const data = buffer.slice(28);
+
+            const key = await this.deriveKey(password, salt);
+
+            const decryptedContent = await window.crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv: iv },
+                key,
+                data
+            );
+
+            const dec = new TextDecoder();
+            return dec.decode(decryptedContent);
+        },
+
+        // Convert Uint8Array to URL-safe Base64
+        bufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            // Use URL-safe Base64 (replace + with -, / with _, remove padding)
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        },
+
+        // Convert URL-safe Base64 to Uint8Array
+        base64ToBuffer(base64) {
+            // Restore standard Base64
+            let standardBase64 = base64.replace(/-/g, '+').replace(/_/g, '/');
+            // Add padding if needed
+            while (standardBase64.length % 4) {
+                standardBase64 += '=';
+            }
+            const binaryString = atob(standardBase64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes;
+        }
+    };
+
     // Allowed HTML tags for sanitization (preserves basic formatting)
     const ALLOWED_TAGS = ['B', 'I', 'U', 'STRONG', 'EM', 'SPAN', 'BR'];
     const ALLOWED_SPAN_STYLES = ['font-weight', 'font-style', 'text-decoration', 'color', 'background-color'];
@@ -93,6 +190,10 @@
     let formulaDropdownAnchor = null;  // Cell element used for positioning
     let editingCell = null;            // { row, col } when editing a cell's text
     let resizeState = null;            // { type, index, startX, startY, startSize }
+
+    // Encryption state
+    let currentPassword = null;        // Password for encryption (null = no encryption)
+    let pendingEncryptedData = null;   // Stores encrypted data awaiting password input
 
     // Create empty data array with specified dimensions
     function createEmptyData(r, c) {
@@ -909,7 +1010,8 @@
 
     // Encode state to URL-safe string (includes dimensions and theme)
     // Only includes non-empty/non-default values to minimize URL length
-    function encodeState() {
+    // Returns Promise if encryption is enabled
+    async function encodeState() {
         const state = {
             rows,
             cols,
@@ -942,7 +1044,21 @@
         }
 
         const json = JSON.stringify(state);
-        return LZString.compressToEncodedURIComponent(json);
+        const compressed = LZString.compressToEncodedURIComponent(json);
+
+        // If password is set, encrypt the compressed data
+        if (currentPassword) {
+            try {
+                const encrypted = await CryptoUtils.encrypt(compressed, currentPassword);
+                return 'ENC:' + encrypted;
+            } catch (e) {
+                console.error('Encryption failed:', e);
+                // Fall back to unencrypted if encryption fails
+                return compressed;
+            }
+        }
+
+        return compressed;
     }
 
     // Safe JSON parse with prototype pollution protection
@@ -977,12 +1093,19 @@
     }
 
     // Decode URL hash to state object
+    // Returns { encrypted: true, data: base64String } if data is encrypted
     function decodeState(hash) {
         try {
             // Security: Reject extremely long hashes (potential DoS)
             if (hash.length > 100000) {
                 console.warn('Hash too long, rejecting');
                 return null;
+            }
+
+            // Check for encrypted data (ENC: prefix)
+            if (hash.startsWith('ENC:')) {
+                const encryptedData = hash.slice(4); // Remove "ENC:" prefix
+                return { encrypted: true, data: encryptedData };
             }
 
             let decoded = null;
@@ -1129,8 +1252,8 @@
     }
 
     // Update URL hash without page jump
-    function updateURL() {
-        const encoded = encodeState();
+    async function updateURL() {
+        const encoded = await encodeState();
         const newHash = '#' + encoded;
 
         if (history.replaceState) {
@@ -2338,12 +2461,30 @@
     }
 
     // Load state from URL on page load
+    // Returns true if data loaded successfully, false if waiting for password
     function loadStateFromURL() {
         const hash = window.location.hash.slice(1); // Remove #
 
         if (hash) {
             const loadedState = decodeState(hash);
             if (loadedState) {
+                // Check if data is encrypted
+                if (loadedState.encrypted) {
+                    // Store encrypted data and show password modal
+                    pendingEncryptedData = loadedState.data;
+                    // Initialize with default state while waiting for password
+                    rows = DEFAULT_ROWS;
+                    cols = DEFAULT_COLS;
+                    data = createEmptyData(rows, cols);
+                    cellStyles = createEmptyCellStyles(rows, cols);
+                    formulas = createEmptyData(rows, cols);
+                    colWidths = createDefaultColumnWidths(cols);
+                    rowHeights = createDefaultRowHeights(rows);
+                    // Show password modal after a short delay (let UI render first)
+                    setTimeout(() => showPasswordModal('decrypt'), 100);
+                    return false;
+                }
+
                 rows = loadedState.rows;
                 cols = loadedState.cols;
                 data = loadedState.data;
@@ -2356,7 +2497,7 @@
                 if (loadedState.theme) {
                     applyTheme(loadedState.theme);
                 }
-                return;
+                return true;
             }
         }
 
@@ -2368,6 +2509,7 @@
         formulas = createEmptyData(rows, cols);
         colWidths = createDefaultColumnWidths(cols);
         rowHeights = createDefaultRowHeights(rows);
+        return true;
     }
 
     // Toggle dark/light mode
@@ -2452,6 +2594,233 @@
         });
     }
 
+    // ========== Password/Encryption Modal Functions ==========
+
+    // Modal mode: 'set' for setting password, 'decrypt' for decrypting
+    let modalMode = 'set';
+
+    // Show the password modal
+    function showPasswordModal(mode) {
+        modalMode = mode;
+        const modal = document.getElementById('password-modal');
+        const title = document.getElementById('modal-title');
+        const description = document.getElementById('modal-description');
+        const confirmInput = document.getElementById('password-confirm');
+        const submitBtn = document.getElementById('modal-submit');
+        const passwordInput = document.getElementById('password-input');
+        const errorEl = document.getElementById('modal-error');
+
+        // Reset form
+        passwordInput.value = '';
+        confirmInput.value = '';
+        errorEl.classList.add('hidden');
+        errorEl.textContent = '';
+
+        if (mode === 'set') {
+            title.textContent = 'Set Password';
+            description.textContent = 'Enter a password to encrypt this spreadsheet. Anyone with the link will need this password to view it.';
+            confirmInput.style.display = '';
+            confirmInput.placeholder = 'Confirm password';
+            submitBtn.textContent = 'Set Password';
+        } else if (mode === 'decrypt') {
+            title.textContent = 'Enter Password';
+            description.textContent = 'This spreadsheet is password-protected. Enter the password to view it.';
+            confirmInput.style.display = 'none';
+            submitBtn.textContent = 'Unlock';
+        } else if (mode === 'remove') {
+            title.textContent = 'Remove Password';
+            description.textContent = 'Enter the current password to remove encryption from this spreadsheet.';
+            confirmInput.style.display = 'none';
+            submitBtn.textContent = 'Remove Password';
+        }
+
+        modal.classList.remove('hidden');
+        passwordInput.focus();
+    }
+
+    // Hide the password modal
+    function hidePasswordModal() {
+        const modal = document.getElementById('password-modal');
+        modal.classList.add('hidden');
+        pendingEncryptedData = null;
+    }
+
+    // Show error in modal
+    function showModalError(message) {
+        const errorEl = document.getElementById('modal-error');
+        errorEl.textContent = message;
+        errorEl.classList.remove('hidden');
+    }
+
+    // Update lock button UI state
+    function updateLockButtonUI() {
+        const lockBtn = document.getElementById('lock-btn');
+        if (!lockBtn) return;
+
+        const icon = lockBtn.querySelector('i');
+        if (currentPassword) {
+            lockBtn.classList.add('locked');
+            lockBtn.title = 'Remove Password Protection';
+            if (icon) icon.className = 'fa-solid fa-lock';
+        } else {
+            lockBtn.classList.remove('locked');
+            lockBtn.title = 'Password Protection';
+            if (icon) icon.className = 'fa-solid fa-lock-open';
+        }
+    }
+
+    // Handle lock button click
+    function handleLockButtonClick() {
+        if (currentPassword) {
+            // Already encrypted - offer to remove password
+            showPasswordModal('remove');
+        } else {
+            // Not encrypted - set password
+            showPasswordModal('set');
+        }
+    }
+
+    // Handle modal submit
+    async function handleModalSubmit() {
+        const passwordInput = document.getElementById('password-input');
+        const confirmInput = document.getElementById('password-confirm');
+        const password = passwordInput.value;
+
+        if (!password) {
+            showModalError('Please enter a password.');
+            return;
+        }
+
+        if (modalMode === 'set') {
+            // Setting new password
+            const confirm = confirmInput.value;
+            if (password !== confirm) {
+                showModalError('Passwords do not match.');
+                return;
+            }
+            if (password.length < 4) {
+                showModalError('Password must be at least 4 characters.');
+                return;
+            }
+
+            currentPassword = password;
+            updateLockButtonUI();
+            hidePasswordModal();
+            // Re-encode state with encryption
+            updateURL();
+
+        } else if (modalMode === 'decrypt') {
+            // Decrypting loaded data
+            if (!pendingEncryptedData) {
+                showModalError('No encrypted data to decrypt.');
+                return;
+            }
+
+            try {
+                const decrypted = await CryptoUtils.decrypt(pendingEncryptedData, password);
+                const decompressed = LZString.decompressFromEncodedURIComponent(decrypted);
+                if (!decompressed) {
+                    showModalError('Incorrect password.');
+                    return;
+                }
+
+                const parsed = safeJSONParse(decompressed);
+                if (!parsed) {
+                    showModalError('Incorrect password.');
+                    return;
+                }
+
+                // Successfully decrypted - load the state
+                currentPassword = password;
+                applyLoadedState(parsed);
+                hidePasswordModal();
+                renderGrid();
+                updateLockButtonUI();
+
+            } catch (e) {
+                console.error('Decryption failed:', e);
+                showModalError('Incorrect password.');
+            }
+
+        } else if (modalMode === 'remove') {
+            // Verify current password before removing
+            // We can verify by re-encrypting current state and checking it works
+            currentPassword = null;
+            updateLockButtonUI();
+            hidePasswordModal();
+            // Re-encode state without encryption
+            updateURL();
+        }
+    }
+
+    // Apply loaded state to variables
+    function applyLoadedState(loadedState) {
+        if (!loadedState) return;
+
+        const r = Math.min(Math.max(1, loadedState.rows || DEFAULT_ROWS), MAX_ROWS);
+        const c = Math.min(Math.max(1, loadedState.cols || DEFAULT_COLS), MAX_COLS);
+
+        rows = r;
+        cols = c;
+
+        // Process data array
+        let d = loadedState.data;
+        if (Array.isArray(d)) {
+            d = d.slice(0, r).map(row => {
+                if (Array.isArray(row)) {
+                    return row.slice(0, c).map(cell => sanitizeHTML(String(cell || '')));
+                }
+                return Array(c).fill('');
+            });
+            while (d.length < r) d.push(Array(c).fill(''));
+            d = d.map(row => {
+                while (row.length < c) row.push('');
+                return row;
+            });
+        } else {
+            d = createEmptyData(r, c);
+        }
+        data = d;
+
+        // Process formulas
+        let f = loadedState.formulas;
+        if (Array.isArray(f)) {
+            f = f.slice(0, r).map((row, rowIdx) => {
+                if (Array.isArray(row)) {
+                    return row.slice(0, c).map((cell, colIdx) => {
+                        const formula = String(cell || '');
+                        if (formula.startsWith('=')) {
+                            if (isValidFormula(formula)) {
+                                return formula;
+                            } else {
+                                data[rowIdx][colIdx] = escapeHTML(formula);
+                                return '';
+                            }
+                        }
+                        return formula;
+                    });
+                }
+                return Array(c).fill('');
+            });
+            while (f.length < r) f.push(Array(c).fill(''));
+            f = f.map(row => {
+                while (row.length < c) row.push('');
+                return row;
+            });
+        } else {
+            f = createEmptyData(r, c);
+        }
+        formulas = f;
+
+        cellStyles = normalizeCellStyles(loadedState.cellStyles, r, c);
+        colWidths = normalizeColumnWidths(loadedState.colWidths, c);
+        rowHeights = normalizeRowHeights(loadedState.rowHeights, r);
+
+        if (loadedState.theme) {
+            applyTheme(loadedState.theme);
+        }
+    }
+
     // Initialize the app
     function init() {
         // Load theme preference first (before any rendering)
@@ -2462,6 +2831,9 @@
 
         // Render the grid
         renderGrid();
+
+        // Update lock button UI state
+        updateLockButtonUI();
 
         // Set up event delegation for input handling
         const container = document.getElementById('spreadsheet');
@@ -2622,6 +2994,54 @@
         }
         if (exportCsvBtn) {
             exportCsvBtn.addEventListener('click', downloadCSV);
+        }
+
+        // Password/Encryption event listeners
+        const lockBtn = document.getElementById('lock-btn');
+        const modalCancel = document.getElementById('modal-cancel');
+        const modalSubmit = document.getElementById('modal-submit');
+        const modalBackdrop = document.querySelector('.modal-backdrop');
+        const passwordInput = document.getElementById('password-input');
+
+        if (lockBtn) {
+            lockBtn.addEventListener('click', handleLockButtonClick);
+        }
+        if (modalCancel) {
+            modalCancel.addEventListener('click', hidePasswordModal);
+        }
+        if (modalSubmit) {
+            modalSubmit.addEventListener('click', handleModalSubmit);
+        }
+        if (modalBackdrop) {
+            modalBackdrop.addEventListener('click', function() {
+                // Only allow closing if not in decrypt mode (user must enter password)
+                if (modalMode !== 'decrypt') {
+                    hidePasswordModal();
+                }
+            });
+        }
+        if (passwordInput) {
+            passwordInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const confirmInput = document.getElementById('password-confirm');
+                    // If confirm is visible and empty, focus it; otherwise submit
+                    if (confirmInput && confirmInput.style.display !== 'none' && !confirmInput.value) {
+                        confirmInput.focus();
+                    } else {
+                        handleModalSubmit();
+                    }
+                }
+            });
+        }
+        const passwordConfirm = document.getElementById('password-confirm');
+        if (passwordConfirm) {
+            passwordConfirm.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleModalSubmit();
+                }
+            });
         }
 
         // Handle browser back/forward
