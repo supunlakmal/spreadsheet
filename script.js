@@ -35,7 +35,12 @@
     function isValidFormula(formula) {
         if (!formula || typeof formula !== 'string') return false;
         if (!formula.startsWith('=')) return false;
-        return VALID_FORMULA_PATTERNS.some(pattern => pattern.test(formula));
+        // Check SUM/AVG patterns
+        if (VALID_FORMULA_PATTERNS.some(pattern => pattern.test(formula))) {
+            return true;
+        }
+        // Check arithmetic expression
+        return isArithmeticFormula(formula);
     }
 
     // Sanitize formula - returns the formula if valid, otherwise escapes it as text
@@ -658,6 +663,246 @@
         return isNaN(num) ? 0 : num;
     }
 
+    // ========== Arithmetic Expression Evaluator ==========
+
+    // Tokenize arithmetic expression into array of tokens
+    // Token types: NUMBER, CELL_REF, OPERATOR, LPAREN, RPAREN
+    function tokenizeArithmetic(expr) {
+        const tokens = [];
+        let i = 0;
+
+        while (i < expr.length) {
+            // Skip whitespace
+            if (/\s/.test(expr[i])) {
+                i++;
+                continue;
+            }
+
+            // Numbers (including decimals)
+            if (/[\d.]/.test(expr[i])) {
+                let num = '';
+                while (i < expr.length && /[\d.]/.test(expr[i])) {
+                    num += expr[i++];
+                }
+                if (!/^\d+\.?\d*$|^\d*\.\d+$/.test(num)) {
+                    return { error: 'Invalid number: ' + num };
+                }
+                tokens.push({ type: 'NUMBER', value: parseFloat(num) });
+                continue;
+            }
+
+            // Cell references (A1, B2, AA99, etc.)
+            if (/[A-Z]/i.test(expr[i])) {
+                let ref = '';
+                while (i < expr.length && /[A-Z]/i.test(expr[i])) {
+                    ref += expr[i++];
+                }
+                while (i < expr.length && /\d/.test(expr[i])) {
+                    ref += expr[i++];
+                }
+                if (!/^[A-Z]+\d+$/i.test(ref)) {
+                    return { error: 'Invalid cell reference: ' + ref };
+                }
+                tokens.push({ type: 'CELL_REF', value: ref.toUpperCase() });
+                continue;
+            }
+
+            // Operators
+            if ('+-*/'.includes(expr[i])) {
+                tokens.push({ type: 'OPERATOR', value: expr[i] });
+                i++;
+                continue;
+            }
+
+            // Parentheses
+            if (expr[i] === '(') {
+                tokens.push({ type: 'LPAREN' });
+                i++;
+                continue;
+            }
+            if (expr[i] === ')') {
+                tokens.push({ type: 'RPAREN' });
+                i++;
+                continue;
+            }
+
+            // Unknown character
+            return { error: 'Unexpected character: ' + expr[i] };
+        }
+
+        return { tokens };
+    }
+
+    // Parse and evaluate arithmetic expression with proper precedence
+    // Grammar:
+    //   expr    -> term (('+' | '-') term)*
+    //   term    -> factor (('*' | '/') factor)*
+    //   factor  -> NUMBER | CELL_REF | '(' expr ')' | '-' factor | '+' factor
+    function evaluateArithmeticExpr(tokens) {
+        let pos = 0;
+
+        function peek() {
+            return tokens[pos];
+        }
+
+        function consume() {
+            return tokens[pos++];
+        }
+
+        function parseExpr() {
+            let left = parseTerm();
+            if (left.error) return left;
+
+            while (peek() && peek().type === 'OPERATOR' &&
+                   (peek().value === '+' || peek().value === '-')) {
+                const op = consume().value;
+                const right = parseTerm();
+                if (right.error) return right;
+
+                left = { value: op === '+' ? left.value + right.value
+                                           : left.value - right.value };
+            }
+            return left;
+        }
+
+        function parseTerm() {
+            let left = parseFactor();
+            if (left.error) return left;
+
+            while (peek() && peek().type === 'OPERATOR' &&
+                   (peek().value === '*' || peek().value === '/')) {
+                const op = consume().value;
+                const right = parseFactor();
+                if (right.error) return right;
+
+                if (op === '/') {
+                    if (right.value === 0) {
+                        return { error: '#DIV/0!' };
+                    }
+                    left = { value: left.value / right.value };
+                } else {
+                    left = { value: left.value * right.value };
+                }
+            }
+            return left;
+        }
+
+        function parseFactor() {
+            const token = peek();
+
+            if (!token) {
+                return { error: '#ERROR!' };
+            }
+
+            // Unary minus
+            if (token.type === 'OPERATOR' && token.value === '-') {
+                consume();
+                const factor = parseFactor();
+                if (factor.error) return factor;
+                return { value: -factor.value };
+            }
+
+            // Unary plus (just consume)
+            if (token.type === 'OPERATOR' && token.value === '+') {
+                consume();
+                return parseFactor();
+            }
+
+            // Number literal
+            if (token.type === 'NUMBER') {
+                consume();
+                return { value: token.value };
+            }
+
+            // Cell reference
+            if (token.type === 'CELL_REF') {
+                consume();
+                const parsed = parseCellRef(token.value);
+                if (!parsed) {
+                    return { error: '#REF!' };
+                }
+                if (parsed.row >= rows || parsed.col >= cols ||
+                    parsed.row < 0 || parsed.col < 0) {
+                    return { error: '#REF!' };
+                }
+                return { value: getCellValue(parsed.row, parsed.col) };
+            }
+
+            // Parenthesized expression
+            if (token.type === 'LPAREN') {
+                consume();
+                const result = parseExpr();
+                if (result.error) return result;
+
+                if (!peek() || peek().type !== 'RPAREN') {
+                    return { error: '#ERROR!' };
+                }
+                consume();
+                return result;
+            }
+
+            return { error: '#ERROR!' };
+        }
+
+        const result = parseExpr();
+
+        // Check for leftover tokens (malformed expression)
+        if (!result.error && pos < tokens.length) {
+            return { error: '#ERROR!' };
+        }
+
+        return result;
+    }
+
+    // Evaluate arithmetic expression string (without leading =)
+    function evaluateArithmetic(expr) {
+        const tokenResult = tokenizeArithmetic(expr);
+        if (tokenResult.error) {
+            return tokenResult.error;
+        }
+
+        if (tokenResult.tokens.length === 0) {
+            return '#ERROR!';
+        }
+
+        const evalResult = evaluateArithmeticExpr(tokenResult.tokens);
+        if (evalResult.error) {
+            return evalResult.error;
+        }
+
+        // Format result (avoid floating point display issues)
+        const value = evalResult.value;
+        if (Number.isInteger(value)) {
+            return value;
+        }
+        // Round to reasonable precision
+        return Math.round(value * 1e10) / 1e10;
+    }
+
+    // Check if expression is a valid arithmetic formula
+    function isArithmeticFormula(formula) {
+        if (!formula || !formula.startsWith('=')) return false;
+        const expr = formula.substring(1).trim();
+        if (expr.length === 0) return false;
+
+        const tokenResult = tokenizeArithmetic(expr);
+        if (tokenResult.error) return false;
+        if (tokenResult.tokens.length === 0) return false;
+
+        // Validate balanced parentheses
+        let parenDepth = 0;
+        for (const token of tokenResult.tokens) {
+            if (token.type === 'LPAREN') {
+                parenDepth++;
+            } else if (token.type === 'RPAREN') {
+                parenDepth--;
+                if (parenDepth < 0) return false;
+            }
+        }
+
+        return parenDepth === 0;
+    }
+
     // Evaluate SUM(range)
     function evaluateSUM(rangeStr) {
         const range = parseRange(rangeStr);
@@ -704,18 +949,24 @@
     function evaluateFormula(formula) {
         if (!formula || !formula.startsWith('=')) return formula;
 
-        const expr = formula.substring(1).trim().toUpperCase();
+        const expr = formula.substring(1).trim();
+        const exprUpper = expr.toUpperCase();
 
         // Match SUM(range)
-        const sumMatch = expr.match(/^SUM\(([A-Z]+\d+:[A-Z]+\d+)\)$/);
+        const sumMatch = exprUpper.match(/^SUM\(([A-Z]+\d+:[A-Z]+\d+)\)$/);
         if (sumMatch) {
             return evaluateSUM(sumMatch[1]);
         }
 
         // Match AVG(range)
-        const avgMatch = expr.match(/^AVG\(([A-Z]+\d+:[A-Z]+\d+)\)$/);
+        const avgMatch = exprUpper.match(/^AVG\(([A-Z]+\d+:[A-Z]+\d+)\)$/);
         if (avgMatch) {
             return evaluateAVG(avgMatch[1]);
+        }
+
+        // Try arithmetic expression
+        if (isArithmeticFormula(formula)) {
+            return evaluateArithmetic(expr);
         }
 
         // Unknown formula
