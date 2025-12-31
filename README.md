@@ -2,7 +2,7 @@
 
 ![Spreadsheet logo](logo.png)
 
-A lightweight, client-only spreadsheet web application. All data persists in the URL hash for instant sharing - no backend required.
+A lightweight, client-only spreadsheet web application. All data persists in the URL hash for instant sharing—no backend required. Optional AES-GCM password protection keeps shared links locked without a server.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Vanilla JS](https://img.shields.io/badge/vanilla-JavaScript-yellow.svg)
@@ -50,6 +50,12 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 - **CSV Export** - Download the current grid as `spreadsheet.csv`
 - **Formula-aware Import** - SUM/AVG formulas are preserved; unsupported formulas are imported as text
 
+### Password Protection & Sharing
+- **One-click lock** - Set a password from the toolbar lock button; password never leaves the browser
+- **AES-GCM 256 + PBKDF2** - 100k iterations with random salt/IV, stored as URL-safe Base64
+- **ENC-prefixed URLs** - Encrypted hashes use `ENC:`; recipients must unlock via modal
+- **Optional** - Unencrypted links continue to work exactly as before
+
 ### Formula Support
 - **SUM / AVG Functions** - Calculate totals or averages with `=SUM(A1:B5)` / `=AVG(A1:B5)`
 - **Formula Autocomplete** - Dropdown suggestions appear when typing `=`
@@ -78,6 +84,7 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 - **Focus Management** - Proper focus handling
 
 ### Security & Privacy
+- **Password-protected links** - AES-GCM encryption with PBKDF2 key derivation; tampering detection via GCM tag
 - **HTML Sanitization** - DOMParser-based whitelist for tags and safe styles
 - **Formula Validation** - Only SUM/AVG range syntax is accepted in formulas
 - **Safe URL Parsing** - Prototype pollution guards and hash length checks
@@ -95,9 +102,9 @@ npx serve .
 
 ## How It Works
 
-Your spreadsheet state is stored entirely in the URL hash. The hash is LZ-String compressed JSON to keep links short, and only non-default data is included.
+Your spreadsheet state is stored entirely in the URL hash. The hash is LZ-String compressed JSON to keep links short, and only non-default data is included. When password protection is enabled, that compressed string is encrypted with AES-GCM (256-bit) using a PBKDF2-derived key (100k iterations, random salt/IV) and stored as URL-safe Base64 with an `ENC:` prefix. The password never leaves the browser; recipients must enter it to decrypt locally.
 
-Example state (decompressed):
+Example state (decompressed, before encryption):
 
 ```
 {
@@ -112,7 +119,7 @@ Example state (decompressed):
 }
 ```
 
-When you edit cells, the URL updates automatically (debounced at 200ms). Formulas are stored separately from displayed values, so both the results and the original formulas are preserved. Column widths, row heights, and cell styles are saved too. Incoming URL state is sanitized and validated (DOMParser whitelist, formula regex, safe JSON parsing), and oversized hashes are rejected. Legacy uncompressed hashes are still supported.
+When you edit cells, the URL updates automatically (debounced at 200ms). Formulas are stored separately from displayed values, so both the results and the original formulas are preserved. Column widths, row heights, and cell styles are saved too. Incoming URL state is sanitized and validated (DOMParser whitelist, formula regex, safe JSON parsing), oversized hashes are rejected, and legacy uncompressed hashes are still supported.
 
 ## Usage
 
@@ -136,6 +143,9 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 | Enter formula | Type `=` followed by function (e.g., `=SUM(A1:B5)`) |
 | Select formula range | Click/drag cells while editing a formula |
 | Share | Click copy button to copy URL |
+| Lock with password | Click the lock icon (open) and set a password in the modal |
+| Unlock encrypted link | Open the link, enter password in the modal to decrypt |
+| Remove password | Click the lock icon (closed) and confirm removal |
 | Toggle theme | Click sun/moon icon |
 
 ## Keyboard Shortcuts
@@ -158,6 +168,7 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 - CSS Grid for spreadsheet layout
 - CSS Custom Properties for theming
 - LZ-String (URL state compression via CDN)
+- Web Crypto API (AES-GCM + PBKDF2) for optional password protection
 - Font Awesome 6.5.1 (icons via CDN)
 - Google Analytics (gtag.js) for usage tracking
 - No build tools required
@@ -181,7 +192,8 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 - Default grid: 10 rows x 10 columns
 - Formulas limited to SUM and AVG range syntax
 - CSV imports larger than 30x15 are truncated
-- URL length limits may apply for very large spreadsheets (compression helps)
+- URL length limits may apply for very large spreadsheets; encrypted links are longer
+- Losing the password means the encrypted data cannot be recovered
 
 ## File Structure
 
@@ -218,11 +230,10 @@ http://localhost:3000
 
 ## Recent Updates
 
-### Latest - Security Hardening and UX Polish
-- Added DOMParser-based sanitization with content safety checks
-- Validated formulas (SUM/AVG range syntax) and safe CSV import handling
-- Added CSP and SRI for external scripts/styles
-- Added favicon and ensured analytics excludes URL hash data
+### Latest - Optional Password Protection
+- Added AES-GCM (256-bit) encryption with PBKDF2 (100k iterations) for URL hashes (`ENC:` prefix)
+- Lock/unlock toolbar button with modal flows for setting, unlocking, and removing passwords
+- URL-safe Base64 payloads; encryption failures fall back safely without breaking sharing
 
 ### v1.4 - Keyboard Navigation
 - Arrow keys move the active selection without entering edit mode
