@@ -581,9 +581,10 @@ body.resizing {
 .cell {
     border: 1px solid var(--border-color);
     margin: -1px 0 0 -1px;
-    transition: border-color 0.3s;
-    background-color: var(--bg-secondary);
+    transition: border-color 0.3s, background-color 0.3s;
+    background-color: var(--cell-bg, var(--bg-secondary));
 }
+
 
 .cell:hover {
     border-color: var(--border-hover);
@@ -664,7 +665,7 @@ body.resizing {
 
 /* Multi-cell selection styles */
 .cell.cell-selected {
-    background-color: var(--cell-bg, transparent);
+    background-color: var(--cell-bg, var(--bg-secondary));
     box-shadow: inset 0 0 0 9999px var(--selection-bg);
     border-color: var(--selection-grid);
     position: relative;
@@ -1032,4 +1033,171 @@ body.resizing {
 
 .lock-btn.locked i::before {
     content: "\f023"; /* fa-lock */
+}
+
+/* ========== Toast Notification System ========== */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+    max-width: 360px;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    pointer-events: auto;
+    transform: translateX(120%);
+    opacity: 0;
+    animation: toast-slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.toast.toast-exit {
+    animation: toast-slide-out 0.3s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes toast-slide-in {
+    0% {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+    100% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes toast-slide-out {
+    0% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    100% {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+}
+
+.toast-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    font-size: 0.875rem;
+}
+
+.toast-message {
+    flex: 1;
+    line-height: 1.4;
+}
+
+.toast-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s, background 0.2s;
+}
+
+.toast-close:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+}
+
+/* Toast Types */
+.toast.toast-success .toast-icon {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+.toast.toast-error .toast-icon {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.toast.toast-warning .toast-icon {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+.toast.toast-info .toast-icon {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+}
+
+/* Progress bar for auto-dismiss */
+.toast-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: var(--accent-color);
+    border-radius: 0 0 12px 12px;
+    animation: toast-progress linear forwards;
+}
+
+@keyframes toast-progress {
+    0% { width: 100%; }
+    100% { width: 0%; }
+}
+
+/* Mobile positioning */
+@media (max-width: 768px) {
+    .toast-container {
+        top: auto;
+        bottom: 90px;
+        left: 16px;
+        right: 16px;
+        max-width: none;
+    }
+    
+    .toast {
+        transform: translateY(120%);
+    }
+    
+    @keyframes toast-slide-in {
+        0% {
+            transform: translateY(120%);
+            opacity: 0;
+        }
+        100% {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes toast-slide-out {
+        0% {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        100% {
+            transform: translateY(120%);
+            opacity: 0;
+        }
+    }
 }

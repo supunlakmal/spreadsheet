@@ -207,6 +207,87 @@
     let currentPassword = null;        // Password for encryption (null = no encryption)
     let pendingEncryptedData = null;   // Stores encrypted data awaiting password input
 
+    // ========== Toast Notification System ==========
+    const TOAST_DURATION = 3000; // Default duration in ms
+    const TOAST_ICONS = {
+        success: 'fa-check',
+        error: 'fa-xmark',
+        warning: 'fa-exclamation',
+        info: 'fa-info'
+    };
+
+    /**
+     * Show a toast notification
+     * @param {string} message - The message to display
+     * @param {string} type - Type: 'success', 'error', 'warning', 'info'
+     * @param {number} duration - Duration in ms (0 for no auto-dismiss)
+     */
+    function showToast(message, type = 'info', duration = TOAST_DURATION) {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.setAttribute('role', 'alert');
+
+        // Icon
+        const icon = document.createElement('div');
+        icon.className = 'toast-icon';
+        icon.innerHTML = `<i class="fa-solid ${TOAST_ICONS[type] || TOAST_ICONS.info}"></i>`;
+        toast.appendChild(icon);
+
+        // Message
+        const msg = document.createElement('div');
+        msg.className = 'toast-message';
+        msg.textContent = message;
+        toast.appendChild(msg);
+
+        // Close button
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'toast-close';
+        closeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+        closeBtn.setAttribute('aria-label', 'Dismiss');
+        closeBtn.addEventListener('click', () => dismissToast(toast));
+        toast.appendChild(closeBtn);
+
+        // Progress bar (if auto-dismiss)
+        if (duration > 0) {
+            const progress = document.createElement('div');
+            progress.className = 'toast-progress';
+            progress.style.animationDuration = `${duration}ms`;
+            toast.appendChild(progress);
+
+            // Auto-dismiss after duration
+            setTimeout(() => dismissToast(toast), duration);
+        }
+
+        // Add to container
+        container.appendChild(toast);
+
+        // Limit max toasts
+        const toasts = container.querySelectorAll('.toast:not(.toast-exit)');
+        if (toasts.length > 5) {
+            dismissToast(toasts[0]);
+        }
+
+        return toast;
+    }
+
+    /**
+     * Dismiss a toast with exit animation
+     * @param {HTMLElement} toast - The toast element to dismiss
+     */
+    function dismissToast(toast) {
+        if (!toast || toast.classList.contains('toast-exit')) return;
+        
+        toast.classList.add('toast-exit');
+        toast.addEventListener('animationend', () => {
+            toast.remove();
+        }, { once: true });
+    }
+
+
     // Create empty data array with specified dimensions
     function createEmptyData(r, c) {
         return Array(r).fill(null).map(() => Array(c).fill(''));
@@ -1115,6 +1196,7 @@
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+        showToast('CSV downloaded', 'success');
     }
 
     function parseCSV(text) {
@@ -1185,7 +1267,7 @@
     function importCSVText(text) {
         const parsedRows = parseCSV(text);
         if (!parsedRows.length) {
-            alert('CSV file is empty.');
+            showToast('CSV file is empty', 'error');
             return;
         }
 
@@ -1229,7 +1311,9 @@
         debouncedUpdateURL();
 
         if (truncated) {
-            alert('CSV exceeded the max size (30 rows x 15 columns). Extra data was truncated.');
+            showToast('CSV imported (some data truncated due to size limits)', 'warning');
+        } else {
+            showToast('CSV imported successfully', 'success');
         }
     }
 
@@ -2758,51 +2842,65 @@
     }
 
     // Clear spreadsheet and reset to default
-    function clearSpreadsheet() {
-        if (!confirm('Clear all data and reset to 10×10 grid?')) {
-            return;
-        }
-
-        // Reset to default dimensions
-        rows = DEFAULT_ROWS;
-        cols = DEFAULT_COLS;
-        data = createEmptyData(rows, cols);
-        formulas = createEmptyData(rows, cols);
-        cellStyles = createEmptyCellStyles(rows, cols);
-        colWidths = createDefaultColumnWidths(cols);
-        rowHeights = createDefaultRowHeights(rows);
-
-        // Clear any selection
-        clearSelection();
-
-        // Re-render and update URL
-        renderGrid();
-        debouncedUpdateURL();
+function clearSpreadsheet() {
+    if (!confirm('Clear all data and reset to 10×10 grid?')) {
+        return;
     }
+
+    // Reset to default dimensions
+    rows = DEFAULT_ROWS;
+    cols = DEFAULT_COLS;
+    data = createEmptyData(rows, cols);
+    formulas = createEmptyData(rows, cols);
+    cellStyles = createEmptyCellStyles(rows, cols);
+    colWidths = createDefaultColumnWidths(cols);
+    rowHeights = createDefaultRowHeights(rows);
+
+    // Clear password
+    currentPassword = null;
+    updateLockButtonUI();
+
+    // Clear any selection
+    clearSelection();
+
+    // Re-render and update URL
+    renderGrid();
+    debouncedUpdateURL();
+
+    showToast('Spreadsheet cleared', 'success');
+}
 
     // Add a new row
-    function addRow() {
-        if (rows >= MAX_ROWS) return;
-        rows++;
-        data.push(Array(cols).fill(''));
-        formulas.push(Array(cols).fill(''));
-        cellStyles.push(Array(cols).fill(null).map(() => createEmptyCellStyle()));
-        rowHeights.push(DEFAULT_ROW_HEIGHT);
-        renderGrid();
-        debouncedUpdateURL();
+function addRow() {
+    if (rows >= MAX_ROWS) {
+        showToast(`Maximum ${MAX_ROWS} rows allowed`, 'warning');
+        return;
     }
+    rows++;
+    data.push(Array(cols).fill(''));
+    formulas.push(Array(cols).fill(''));
+    cellStyles.push(Array(cols).fill(null).map(() => createEmptyCellStyle()));
+    rowHeights.push(DEFAULT_ROW_HEIGHT);
+    renderGrid();
+    debouncedUpdateURL();
+    showToast(`Row ${rows} added`, 'success');
+}
 
     // Add a new column
-    function addColumn() {
-        if (cols >= MAX_COLS) return;
-        cols++;
-        data.forEach(row => row.push(''));
-        formulas.forEach(row => row.push(''));
-        cellStyles.forEach(row => row.push(createEmptyCellStyle()));
-        colWidths.push(DEFAULT_COL_WIDTH);
-        renderGrid();
-        debouncedUpdateURL();
+function addColumn() {
+    if (cols >= MAX_COLS) {
+        showToast(`Maximum ${MAX_COLS} columns allowed`, 'warning');
+        return;
     }
+    cols++;
+    data.forEach(row => row.push(''));
+    formulas.forEach(row => row.push(''));
+    cellStyles.forEach(row => row.push(createEmptyCellStyle()));
+    colWidths.push(DEFAULT_COL_WIDTH);
+    renderGrid();
+    debouncedUpdateURL();
+    showToast(`Column ${colToLetter(cols - 1)} added`, 'success');
+}
 
     // Load state from URL on page load
     // Returns true if data loaded successfully, false if waiting for password
@@ -2899,6 +2997,7 @@
 
         navigator.clipboard.writeText(url).then(function() {
             // Show success feedback
+            showToast('Link copied to clipboard!', 'success');
             if (copyBtn) {
                 copyBtn.classList.add('copied');
                 const icon = copyBtn.querySelector('i');
@@ -2915,6 +3014,7 @@
                 }, 2000);
             }
         }).catch(function(err) {
+
             console.error('Failed to copy URL:', err);
             // Fallback for older browsers
             const textArea = document.createElement('textarea');
@@ -3052,6 +3152,7 @@
             hidePasswordModal();
             // Re-encode state with encryption
             updateURL();
+            showToast('Password protection enabled', 'success');
 
         } else if (modalMode === 'decrypt') {
             // Decrypting loaded data
@@ -3080,6 +3181,7 @@
                 hidePasswordModal();
                 renderGrid();
                 updateLockButtonUI();
+                showToast('Spreadsheet unlocked', 'success');
 
             } catch (e) {
                 console.error('Decryption failed:', e);
@@ -3094,6 +3196,7 @@
             hidePasswordModal();
             // Re-encode state without encryption
             updateURL();
+            showToast('Password protection removed', 'success');
         }
     }
 
