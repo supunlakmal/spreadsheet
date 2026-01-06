@@ -1,7 +1,4 @@
-import {
-  TOAST_DURATION,
-  TOAST_ICONS
-} from "./constants.js";
+import { TOAST_DURATION, TOAST_ICONS } from "./constants.js";
 
 /**
  * Dismiss a toast with exit animation

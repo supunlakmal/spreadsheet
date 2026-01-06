@@ -1,4 +1,3 @@
-
 import { FORMULA_SUGGESTIONS } from "./constants.js";
 
 // ==========================================
@@ -67,7 +66,7 @@ export function buildRangeRef(startRow, startCol, endRow, endCol) {
 // Check if a formula string is valid (arithmetic or supported functions)
 export function isValidFormula(formula) {
   if (!formula || !formula.startsWith("=")) return false;
-  
+
   // Check supported functions
   if (/^=SUM\([A-Z]+\d+:[A-Z]+\d+\)$/i.test(formula)) return true;
   if (/^=AVG\([A-Z]+\d+:[A-Z]+\d+\)$/i.test(formula)) return true;
@@ -347,7 +346,7 @@ export const FormulaEvaluator = {
         // script.js checked raw data for null/empty.
         // We need 'data' access in context for this precise logic.
         const raw = data[r][c];
-        
+
         if (raw === null || raw === undefined) continue;
         const stripped = String(raw)
           .replace(/<[^>]*>/g, "")
@@ -388,7 +387,7 @@ export const FormulaEvaluator = {
 
     // Unknown formula
     return "#ERROR!";
-  }
+  },
 };
 
 // ==========================================
@@ -405,7 +404,7 @@ export const FormulaDropdownManager = {
   init(onSelectCallback) {
     if (this.element) return;
     this.onSelect = onSelectCallback;
-    
+
     const dropdown = document.createElement("div");
     dropdown.className = "formula-dropdown";
     dropdown.setAttribute("role", "listbox");
@@ -507,7 +506,7 @@ export const FormulaDropdownManager = {
 
     const query = this.getFormulaQuery(rawValue);
     const suggestions = this.getSuggestions(query);
-    
+
     if (!anchor || suggestions.length === 0 || query === null) {
       this.hide();
       return;
@@ -548,12 +547,12 @@ export const FormulaDropdownManager = {
     if (nextIndex >= this.items.length) nextIndex = 0;
     this.setActiveItem(nextIndex);
   },
-  
+
   // Get currently active item's formula name
   getActiveFormulaName() {
     if (this.activeIndex >= 0 && this.activeIndex < this.items.length) {
       return this.items[this.activeIndex].dataset.formula;
     }
     return null;
-  }
+  },
 };

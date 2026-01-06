@@ -2,107 +2,55 @@
 // Data persists in URL hash for easy sharing
 
 // Import constants from ES6 module
-import {
-  ACTIVE_HEADER_CLASS,
-  DEBOUNCE_DELAY,
-  DEFAULT_COL_WIDTH,
-  DEFAULT_COLS,
-  DEFAULT_ROW_HEIGHT,
-  DEFAULT_ROWS,
-  FONT_SIZE_OPTIONS,
-  HEADER_ROW_HEIGHT,
-  KEY_MAP,
-  KEY_MAP_REVERSE,
-  MAX_COLS,
-  MAX_ROWS,
-  MIN_COL_WIDTH,
-  MIN_ROW_HEIGHT,
-  ROW_HEADER_WIDTH,
-  STYLE_KEY_MAP,
-  URL_LENGTH_WARNING,
-  URL_LENGTH_CRITICAL,
-  URL_LENGTH_MAX_DISPLAY,
-  URL_LENGTH_CAUTION
-} from "./modules/constants.js";
+import { DEBOUNCE_DELAY, DEFAULT_COLS, DEFAULT_ROWS, MAX_COLS, MAX_ROWS } from "./modules/constants.js";
+import { buildRangeRef, FormulaDropdownManager, FormulaEvaluator, isValidFormula } from "./modules/formulaManager.js";
 import { PasswordManager } from "./modules/passwordManager.js";
+import {
+  addColumn,
+  addRow,
+  clearActiveHeaders,
+  clearSelectedCells,
+  clearSelection,
+  clearSpreadsheet,
+  focusCellAt,
+  getCellContentElement,
+  getCellElement,
+  getSelectionBounds,
+  getState,
+  handleMouseDown,
+  handleMouseLeave,
+  handleMouseMove,
+  handleMouseUp,
+  handleResizeStart,
+  handleTouchEnd,
+  handleTouchMove,
+  handleTouchStart,
+  hasMultiSelection,
+  renderGrid,
+  setActiveHeaders,
+  setCallbacks,
+  setState,
+  updateSelectionVisuals,
+} from "./modules/rowColManager.js";
+import { escapeHTML, isValidCSSColor, sanitizeHTML } from "./modules/security.js";
 import { showToast } from "./modules/toastManager.js";
 import {
-  isValidCSSColor,
-  escapeHTML,
-  filterSafeStyles,
-  isContentSafe,
-  sanitizeHTML
-} from "./modules/security.js";
-import {
-  colToLetter,
-  letterToCol,
-  parseCellRef,
-  parseRange,
-  buildCellRef,
-  buildRangeRef,
-  isValidFormula,
-  FormulaEvaluator,
-  FormulaDropdownManager
-} from "./modules/formulaManager.js";
-import {
-  URLManager,
-  createEmptyData,
-  createEmptyCellStyle,
-  createEmptyCellStyles,
   createDefaultColumnWidths,
   createDefaultRowHeights,
+  createEmptyCellStyle,
+  createEmptyCellStyles,
+  createEmptyData,
+  isCellStylesDefault,
+  isColWidthsDefault,
+  isDataEmpty,
+  isFormulasEmpty,
+  isRowHeightsDefault,
   normalizeCellStyles,
   normalizeColumnWidths,
   normalizeRowHeights,
-  isDataEmpty,
-  isFormulasEmpty,
-  isCellStyleDefault,
-  isCellStylesDefault,
-  isColWidthsDefault,
-  isRowHeightsDefault,
-  validateAndNormalizeState
+  URLManager,
+  validateAndNormalizeState,
 } from "./modules/urlManager.js";
-import {
-  getState,
-  setState,
-  setCallbacks,
-  updateUI,
-  applyGridTemplate,
-  renderGrid,
-  clearActiveHeaders,
-  setActiveHeaders,
-  setActiveHeadersForRange,
-  getSelectionBounds,
-  hasMultiSelection,
-  clearSelection,
-  updateSelectionVisuals,
-  clearSelectedCells,
-  getCellContentFromTarget,
-  addHoverRow,
-  addHoverCol,
-  removeHoverRow,
-  removeHoverCol,
-  clearHoverHighlights,
-  setHoverHighlight,
-  updateHoverFromTarget,
-  getCellFromPoint,
-  getCellContentElement,
-  getCellElement,
-  focusCellAt,
-  handleResizeStart,
-  handleResizeMove,
-  handleResizeEnd,
-  handleMouseDown,
-  handleMouseMove,
-  handleMouseLeave,
-  handleMouseUp,
-  handleTouchStart,
-  handleTouchMove,
-  handleTouchEnd,
-  addRow,
-  addColumn,
-  clearSpreadsheet
-} from "./modules/rowColManager.js";
 
 (function () {
   "use strict";
@@ -134,11 +82,9 @@ import {
   // Create empty data array with specified dimensions
   // Factory functions moved to modules/urlManager.js
 
-
   // ========== Security Functions ==========
 
   // Security Functions moved to modules/security.js
-
 
   // Insert text at current cursor position in contentEditable
   function insertTextAtCursor(text) {
@@ -167,7 +113,6 @@ import {
     selection.removeAllRanges();
     selection.addRange(range);
   }
-
 
   function applyFormulaSuggestion(formulaName) {
     const target = formulaEditCell ? formulaEditCell.element : document.activeElement;
@@ -205,7 +150,6 @@ import {
     const num = parseFloat(stripped);
     return isNaN(num) ? 0 : num;
   }
-
 
   // Recalculate all formula cells
   function recalculateFormulas() {
@@ -258,7 +202,6 @@ import {
   }
 
   // Normalization functions moved to modules/urlManager.js
-
 
   function extractPlainText(value) {
     if (value === null || value === undefined) return "";
@@ -428,15 +371,12 @@ import {
 
   // Helper functions moved to modules/urlManager.js
 
-
   // Minify state object keys for smaller URL payload
   // State helpers moved to modules/urlManager.js
-
 
   // ========== Serialization Codec (Wrapper for minify/expand + compression) ==========
   // Handles state serialization without encryption concerns
   // Codec, validation, and decode functions moved to modules/urlManager.js
-
 
   // Apply theme to body
   function applyTheme(theme) {
@@ -493,7 +433,6 @@ import {
     const state = buildCurrentState();
     await URLManager.updateURL(state, PasswordManager.getPassword());
   }
-
 
   // Debounced URL update
   function debouncedUpdateURL() {
@@ -1193,22 +1132,32 @@ import {
       debouncedUpdateURL,
       recalculateFormulas,
       getDataArray: () => data,
-      setDataArray: (newData) => { data = newData; },
+      setDataArray: (newData) => {
+        data = newData;
+      },
       getFormulasArray: () => formulas,
-      setFormulasArray: (newFormulas) => { formulas = newFormulas; },
+      setFormulasArray: (newFormulas) => {
+        formulas = newFormulas;
+      },
       getCellStylesArray: () => cellStyles,
-      setCellStylesArray: (newCellStyles) => { cellStyles = newCellStyles; },
+      setCellStylesArray: (newCellStyles) => {
+        cellStyles = newCellStyles;
+      },
       PasswordManager,
       // Formula mode callbacks
       getFormulaEditMode: () => formulaEditMode,
       getFormulaEditCell: () => formulaEditCell,
-      setFormulaRangeStart: (val) => { formulaRangeStart = val; },
-      setFormulaRangeEnd: (val) => { formulaRangeEnd = val; },
+      setFormulaRangeStart: (val) => {
+        formulaRangeStart = val;
+      },
+      setFormulaRangeEnd: (val) => {
+        formulaRangeEnd = val;
+      },
       getFormulaRangeStart: () => formulaRangeStart,
       getFormulaRangeEnd: () => formulaRangeEnd,
       buildRangeRef,
       insertTextAtCursor,
-      FormulaDropdownManager
+      FormulaDropdownManager,
     });
 
     // Load theme preference first (before any rendering)
@@ -1232,7 +1181,7 @@ import {
       },
       updateURL: updateURL,
       showToast: showToast,
-      validateState: validateAndNormalizeState
+      validateState: validateAndNormalizeState,
     });
 
     // Initialize URL length indicator with current hash length

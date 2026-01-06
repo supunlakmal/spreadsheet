@@ -1,29 +1,24 @@
-
 import {
-  DEFAULT_ROWS,
-  DEFAULT_COLS,
-  MAX_ROWS,
-  MAX_COLS,
   DEFAULT_COL_WIDTH,
-  MIN_COL_WIDTH,
+  DEFAULT_COLS,
   DEFAULT_ROW_HEIGHT,
-  MIN_ROW_HEIGHT,
+  DEFAULT_ROWS,
   FONT_SIZE_OPTIONS,
   KEY_MAP,
   KEY_MAP_REVERSE,
+  MAX_COLS,
+  MAX_ROWS,
+  MIN_COL_WIDTH,
+  MIN_ROW_HEIGHT,
   STYLE_KEY_MAP,
-  URL_LENGTH_WARNING,
+  URL_LENGTH_CAUTION,
   URL_LENGTH_CRITICAL,
   URL_LENGTH_MAX_DISPLAY,
-  URL_LENGTH_CAUTION
+  URL_LENGTH_WARNING,
 } from "./constants.js";
 import { CryptoUtils, EncryptionCodec } from "./encryption.js";
-import {
-  sanitizeHTML,
-  isValidCSSColor,
-  escapeHTML
-} from "./security.js";
 import { isValidFormula } from "./formulaManager.js";
+import { escapeHTML, isValidCSSColor, sanitizeHTML } from "./security.js";
 
 // Factory functions
 export function createEmptyData(r, c) {
@@ -155,7 +150,6 @@ export function isRowHeightsDefault(heights, count) {
   if (heights.length !== count) return false;
   return heights.every((h) => h === DEFAULT_ROW_HEIGHT);
 }
-
 
 // Safe JSON parse with prototype pollution protection
 function safeJSONParse(jsonString) {
@@ -538,5 +532,5 @@ export const URLManager = {
     }
   },
 
-  updateURLLengthIndicator
+  updateURLLengthIndicator,
 };

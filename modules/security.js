@@ -1,7 +1,4 @@
-import {
-  ALLOWED_TAGS,
-  ALLOWED_SPAN_STYLES
-} from "./constants.js";
+import { ALLOWED_SPAN_STYLES, ALLOWED_TAGS } from "./constants.js";
 
 // Validate CSS color values to prevent CSS injection
 export function isValidCSSColor(color) {

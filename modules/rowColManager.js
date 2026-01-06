@@ -12,19 +12,13 @@ import {
   MAX_ROWS,
   MIN_COL_WIDTH,
   MIN_ROW_HEIGHT,
-  ROW_HEADER_WIDTH
+  ROW_HEADER_WIDTH,
 } from "./constants.js";
 
 import { colToLetter } from "./formulaManager.js";
 import { sanitizeHTML } from "./security.js";
 import { showToast } from "./toastManager.js";
-import {
-  createEmptyData,
-  createEmptyCellStyle,
-  createEmptyCellStyles,
-  createDefaultColumnWidths,
-  createDefaultRowHeights
-} from "./urlManager.js";
+import { createDefaultColumnWidths, createDefaultRowHeights, createEmptyCellStyle, createEmptyCellStyles, createEmptyData } from "./urlManager.js";
 
 // ========== State ==========
 const state = {
@@ -39,7 +33,7 @@ const state = {
   hoverCol: null,
   activeRow: null,
   activeCol: null,
-  resizeState: null
+  resizeState: null,
 };
 
 // ========== Callbacks ==========
@@ -62,7 +56,7 @@ let callbacks = {
   getFormulaRangeEnd: null,
   buildRangeRef: null,
   insertTextAtCursor: null,
-  FormulaDropdownManager: null
+  FormulaDropdownManager: null,
 };
 
 // ========== State Accessors ==========

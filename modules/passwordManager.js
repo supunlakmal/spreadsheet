@@ -37,7 +37,7 @@ export const PasswordManager = {
 
   /**
    * Set the current password (e.g. after successful decryption or setting new)
-   * @param {string|null} password 
+   * @param {string|null} password
    */
   setPassword(password) {
     this.currentPassword = password;
@@ -46,7 +46,7 @@ export const PasswordManager = {
 
   /**
    * Handle encrypted data found during load
-   * @param {string} encryptedData 
+   * @param {string} encryptedData
    */
   handleEncryptedData(encryptedData) {
     this.pendingEncryptedData = encryptedData;
@@ -105,7 +105,7 @@ export const PasswordManager = {
     if (modal) modal.classList.add("hidden");
     // Clear pending data if we cancelled decryption (though usually we'd want to keep it if they just closed modal?)
     // Original logic cleared it:
-    // this.pendingEncryptedData = null; 
+    // this.pendingEncryptedData = null;
     // But if we cancel decryption, we probably can't view the file anyway.
   },
 
@@ -146,7 +146,7 @@ export const PasswordManager = {
   async handleModalSubmit() {
     const passwordInput = document.getElementById("password-input");
     const confirmInput = document.getElementById("password-confirm");
-    
+
     if (!passwordInput) return;
     const password = passwordInput.value;
 
@@ -173,7 +173,6 @@ export const PasswordManager = {
       // Re-encode state with encryption
       this.callbacks.updateURL();
       this.callbacks.showToast("Password protection enabled", "success");
-
     } else if (this.modalMode === "decrypt") {
       // Decrypting loaded data
       if (!this.pendingEncryptedData) {
@@ -197,31 +196,29 @@ export const PasswordManager = {
         this.currentPassword = password;
         this.pendingEncryptedData = null; // Clear it
         this.callbacks.onDecryptSuccess(validatedState);
-        
+
         this.hidePasswordModal();
         this.updateLockButtonUI();
         this.callbacks.showToast("Spreadsheet unlocked", "success");
-
       } catch (e) {
         console.error("Decryption failed:", e);
         this.showModalError("Incorrect password.");
       }
-
     } else if (this.modalMode === "remove") {
       // For now, we trust they have the password if they are here (or we could verify it matches current)
       // Note: Original code didn't strictly verify against currentPassword (it just checked if you entered *something*?)
       // Wait, original: `if (modalMode === "remove") { ... currentPassword = null ... }`
-      // It didn't verify the typed password matches the active `currentPassword`. 
+      // It didn't verify the typed password matches the active `currentPassword`.
       // It prompted "Enter the current password", but didn't actually check it against `currentPassword`.
       // The assumption is if you are viewing the file, you know the password (or it was just unlocked).
       // However, for better security UX, we might want to check, but let's stick to original behavior to minimize regression risk.
-      // But wait, if I type "wrong" password to remove, it shouldn't work? 
+      // But wait, if I type "wrong" password to remove, it shouldn't work?
       // Actually, since `currentPassword` is in memory, we CAN check it.
       // If `currentPassword` is set, we SHOULD check.
-      
+
       if (this.currentPassword && password !== this.currentPassword) {
-         this.showModalError("Incorrect password.");
-         return;
+        this.showModalError("Incorrect password.");
+        return;
       }
 
       this.currentPassword = null;
@@ -282,5 +279,5 @@ export const PasswordManager = {
         }
       });
     }
-  }
+  },
 };
