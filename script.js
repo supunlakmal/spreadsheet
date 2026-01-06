@@ -10,7 +10,6 @@ import {
   DEFAULT_ROW_HEIGHT,
   DEFAULT_ROWS,
   FONT_SIZE_OPTIONS,
-  FORMULA_SUGGESTIONS,
   HEADER_ROW_HEIGHT,
   KEY_MAP,
   KEY_MAP_REVERSE,
@@ -21,7 +20,9 @@ import {
   ROW_HEADER_WIDTH,
   STYLE_KEY_MAP,
   URL_LENGTH_WARNING,
-  URL_LENGTH_CRITICAL
+  URL_LENGTH_CRITICAL,
+  URL_LENGTH_MAX_DISPLAY,
+  URL_LENGTH_CAUTION
 } from "./modules/constants.js";
 import { CryptoUtils, EncryptionCodec } from "./modules/encryption.js";
 import { PasswordManager } from "./modules/passwordManager.js";
@@ -33,6 +34,17 @@ import {
   isContentSafe,
   sanitizeHTML
 } from "./modules/security.js";
+import {
+  colToLetter,
+  letterToCol,
+  parseCellRef,
+  parseRange,
+  buildCellRef,
+  buildRangeRef,
+  isValidFormula,
+  FormulaEvaluator,
+  FormulaDropdownManager
+} from "./modules/formulaManager.js";
 
 (function () {
   "use strict";
@@ -71,10 +83,6 @@ import {
   let formulaEditCell = null; // { row, col, element } of cell being edited
   let formulaRangeStart = null; // Start of range being selected
   let formulaRangeEnd = null; // End of range being selected
-  let formulaDropdown = null; // DOM node for formula suggestions
-  let formulaDropdownItems = []; // List of visible dropdown items
-  let formulaDropdownIndex = -1; // Active item index
-  let formulaDropdownAnchor = null; // Cell element used for positioning
   let editingCell = null; // { row, col } when editing a cell's text
   let resizeState = null; // { type, index, startX, startY, startSize }
 
@@ -144,66 +152,6 @@ import {
 
   // Security Functions moved to modules/security.js
 
-  // Convert column index to letter (0 = A, 1 = B, ... 25 = Z)
-  function colToLetter(col) {
-    return String.fromCharCode(65 + col);
-  }
-
-  // ========== Formula Helper Functions ==========
-
-  // Convert column letter(s) to index: A=0, B=1, ..., O=14
-  function letterToCol(letters) {
-    letters = letters.toUpperCase();
-    let col = 0;
-    for (let i = 0; i < letters.length; i++) {
-      col = col * 26 + (letters.charCodeAt(i) - 64);
-    }
-    return col - 1;
-  }
-
-  // Parse cell reference "A1" → { row: 0, col: 0 }
-  function parseCellRef(ref) {
-    const match = ref.toUpperCase().match(/^([A-Z]+)(\d+)$/);
-    if (!match) return null;
-    return {
-      col: letterToCol(match[1]),
-      row: parseInt(match[2], 10) - 1,
-    };
-  }
-
-  // Parse range "A1:B5" → { startRow, startCol, endRow, endCol }
-  function parseRange(range) {
-    const parts = range.split(":");
-    if (parts.length !== 2) return null;
-    const start = parseCellRef(parts[0].trim());
-    const end = parseCellRef(parts[1].trim());
-    if (!start || !end) return null;
-    return {
-      startRow: Math.min(start.row, end.row),
-      startCol: Math.min(start.col, end.col),
-      endRow: Math.max(start.row, end.row),
-      endCol: Math.max(start.col, end.col),
-    };
-  }
-
-  // Build cell reference string like "A1"
-  function buildCellRef(row, col) {
-    return colToLetter(col) + (row + 1);
-  }
-
-  // Build range reference string like "A1:B5"
-  function buildRangeRef(startRow, startCol, endRow, endCol) {
-    const minRow = Math.min(startRow, endRow);
-    const maxRow = Math.max(startRow, endRow);
-    const minCol = Math.min(startCol, endCol);
-    const maxCol = Math.max(startCol, endCol);
-
-    if (minRow === maxRow && minCol === maxCol) {
-      // Single cell
-      return buildCellRef(minRow, minCol);
-    }
-    return buildCellRef(minRow, minCol) + ":" + buildCellRef(maxRow, maxCol);
-  }
 
   // Insert text at current cursor position in contentEditable
   function insertTextAtCursor(text) {
@@ -233,148 +181,6 @@ import {
     selection.addRange(range);
   }
 
-  function getFormulaQuery(rawValue) {
-    const match = rawValue.match(/^=\s*([A-Z]*)$/i);
-    if (!match) return null;
-    return match[1].toUpperCase();
-  }
-
-  function getFormulaSuggestions(query) {
-    if (query === null) return [];
-    if (query === "") return FORMULA_SUGGESTIONS.slice();
-    return FORMULA_SUGGESTIONS.filter((item) => item.name.startsWith(query));
-  }
-
-  function createFormulaDropdown() {
-    if (formulaDropdown) return;
-    const dropdown = document.createElement("div");
-    dropdown.className = "formula-dropdown";
-    dropdown.setAttribute("role", "listbox");
-    dropdown.setAttribute("aria-hidden", "true");
-
-    dropdown.addEventListener("mousedown", function (event) {
-      event.preventDefault();
-    });
-
-    dropdown.addEventListener("click", function (event) {
-      const item = event.target.closest(".formula-item");
-      if (!item) return;
-      const formulaName = item.dataset.formula;
-      if (formulaName) {
-        applyFormulaSuggestion(formulaName);
-      }
-    });
-
-    document.body.appendChild(dropdown);
-    formulaDropdown = dropdown;
-  }
-
-  function isFormulaDropdownOpen() {
-    return !!(formulaDropdown && formulaDropdown.classList.contains("open"));
-  }
-
-  function setActiveFormulaItem(index) {
-    formulaDropdownIndex = index;
-    formulaDropdownItems.forEach((item, idx) => {
-      if (idx === index) {
-        item.classList.add("active");
-        item.setAttribute("aria-selected", "true");
-        item.scrollIntoView({ block: "nearest" });
-      } else {
-        item.classList.remove("active");
-        item.setAttribute("aria-selected", "false");
-      }
-    });
-  }
-
-  function positionFormulaDropdown(anchor) {
-    if (!formulaDropdown || !anchor) return;
-    const rect = anchor.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const padding = 6;
-
-    formulaDropdown.style.left = `${rect.left}px`;
-    formulaDropdown.style.top = `${rect.bottom + 4}px`;
-
-    const dropdownRect = formulaDropdown.getBoundingClientRect();
-    let left = rect.left;
-    let top = rect.bottom + 4;
-
-    if (left + dropdownRect.width > viewportWidth - padding) {
-      left = Math.max(padding, viewportWidth - dropdownRect.width - padding);
-    }
-
-    if (top + dropdownRect.height > viewportHeight - padding) {
-      const above = rect.top - dropdownRect.height - 4;
-      if (above > padding) {
-        top = above;
-      }
-    }
-
-    formulaDropdown.style.left = `${left}px`;
-    formulaDropdown.style.top = `${top}px`;
-  }
-
-  function showFormulaDropdown() {
-    if (!formulaDropdown) return;
-    formulaDropdown.classList.add("open");
-    formulaDropdown.setAttribute("aria-hidden", "false");
-  }
-
-  function hideFormulaDropdown() {
-    if (!formulaDropdown) return;
-    formulaDropdown.classList.remove("open");
-    formulaDropdown.setAttribute("aria-hidden", "true");
-    formulaDropdownItems = [];
-    formulaDropdownIndex = -1;
-    formulaDropdownAnchor = null;
-  }
-
-  function updateFormulaDropdown(anchor, rawValue) {
-    createFormulaDropdown();
-    const query = getFormulaQuery(rawValue);
-    const suggestions = getFormulaSuggestions(query);
-    if (!anchor || suggestions.length === 0 || query === null) {
-      hideFormulaDropdown();
-      return;
-    }
-
-    formulaDropdownAnchor = anchor;
-    formulaDropdown.innerHTML = "";
-    suggestions.forEach((item) => {
-      const option = document.createElement("div");
-      option.className = "formula-item";
-      option.dataset.formula = item.name;
-      option.setAttribute("role", "option");
-      option.setAttribute("aria-selected", "false");
-
-      const nameEl = document.createElement("div");
-      nameEl.className = "formula-name";
-      nameEl.textContent = item.name;
-
-      const hintEl = document.createElement("div");
-      hintEl.className = "formula-hint";
-      hintEl.textContent = `${item.signature} - ${item.description}`;
-
-      option.appendChild(nameEl);
-      option.appendChild(hintEl);
-      formulaDropdown.appendChild(option);
-    });
-
-    formulaDropdownItems = Array.from(formulaDropdown.querySelectorAll(".formula-item"));
-    setActiveFormulaItem(0);
-    showFormulaDropdown();
-    positionFormulaDropdown(anchor);
-  }
-
-  function moveFormulaDropdownSelection(delta) {
-    if (!formulaDropdownItems.length) return;
-    let nextIndex = formulaDropdownIndex + delta;
-    if (nextIndex < 0) nextIndex = formulaDropdownItems.length - 1;
-    if (nextIndex >= formulaDropdownItems.length) nextIndex = 0;
-    setActiveFormulaItem(nextIndex);
-  }
 
   function applyFormulaSuggestion(formulaName) {
     const target = formulaEditCell ? formulaEditCell.element : document.activeElement;
@@ -393,7 +199,7 @@ import {
     formulas[row][col] = newValue;
     data[row][col] = newValue;
 
-    hideFormulaDropdown();
+    FormulaDropdownManager.hide();
     debouncedUpdateURL();
   }
 
@@ -412,313 +218,6 @@ import {
     return isNaN(num) ? 0 : num;
   }
 
-  // ========== Arithmetic Expression Evaluator ==========
-
-  // Tokenize arithmetic expression into array of tokens
-  // Token types: NUMBER, CELL_REF, OPERATOR, LPAREN, RPAREN
-  function tokenizeArithmetic(expr) {
-    const tokens = [];
-    let i = 0;
-
-    while (i < expr.length) {
-      // Skip whitespace
-      if (/\s/.test(expr[i])) {
-        i++;
-        continue;
-      }
-
-      // Numbers (including decimals)
-      if (/[\d.]/.test(expr[i])) {
-        let num = "";
-        while (i < expr.length && /[\d.]/.test(expr[i])) {
-          num += expr[i++];
-        }
-        if (!/^\d+\.?\d*$|^\d*\.\d+$/.test(num)) {
-          return { error: "Invalid number: " + num };
-        }
-        tokens.push({ type: "NUMBER", value: parseFloat(num) });
-        continue;
-      }
-
-      // Cell references (A1, B2, AA99, etc.)
-      if (/[A-Z]/i.test(expr[i])) {
-        let ref = "";
-        while (i < expr.length && /[A-Z]/i.test(expr[i])) {
-          ref += expr[i++];
-        }
-        while (i < expr.length && /\d/.test(expr[i])) {
-          ref += expr[i++];
-        }
-        if (!/^[A-Z]+\d+$/i.test(ref)) {
-          return { error: "Invalid cell reference: " + ref };
-        }
-        tokens.push({ type: "CELL_REF", value: ref.toUpperCase() });
-        continue;
-      }
-
-      // Operators
-      if ("+-*/".includes(expr[i])) {
-        tokens.push({ type: "OPERATOR", value: expr[i] });
-        i++;
-        continue;
-      }
-
-      // Parentheses
-      if (expr[i] === "(") {
-        tokens.push({ type: "LPAREN" });
-        i++;
-        continue;
-      }
-      if (expr[i] === ")") {
-        tokens.push({ type: "RPAREN" });
-        i++;
-        continue;
-      }
-
-      // Unknown character
-      return { error: "Unexpected character: " + expr[i] };
-    }
-
-    return { tokens };
-  }
-
-  // Parse and evaluate arithmetic expression with proper precedence
-  // Grammar:
-  //   expr    -> term (('+' | '-') term)*
-  //   term    -> factor (('*' | '/') factor)*
-  //   factor  -> NUMBER | CELL_REF | '(' expr ')' | '-' factor | '+' factor
-  function evaluateArithmeticExpr(tokens) {
-    let pos = 0;
-
-    function peek() {
-      return tokens[pos];
-    }
-
-    function consume() {
-      return tokens[pos++];
-    }
-
-    function parseExpr() {
-      let left = parseTerm();
-      if (left.error) return left;
-
-      while (peek() && peek().type === "OPERATOR" && (peek().value === "+" || peek().value === "-")) {
-        const op = consume().value;
-        const right = parseTerm();
-        if (right.error) return right;
-
-        left = { value: op === "+" ? left.value + right.value : left.value - right.value };
-      }
-      return left;
-    }
-
-    function parseTerm() {
-      let left = parseFactor();
-      if (left.error) return left;
-
-      while (peek() && peek().type === "OPERATOR" && (peek().value === "*" || peek().value === "/")) {
-        const op = consume().value;
-        const right = parseFactor();
-        if (right.error) return right;
-
-        if (op === "/") {
-          if (right.value === 0) {
-            return { error: "#DIV/0!" };
-          }
-          left = { value: left.value / right.value };
-        } else {
-          left = { value: left.value * right.value };
-        }
-      }
-      return left;
-    }
-
-    function parseFactor() {
-      const token = peek();
-
-      if (!token) {
-        return { error: "#ERROR!" };
-      }
-
-      // Unary minus
-      if (token.type === "OPERATOR" && token.value === "-") {
-        consume();
-        const factor = parseFactor();
-        if (factor.error) return factor;
-        return { value: -factor.value };
-      }
-
-      // Unary plus (just consume)
-      if (token.type === "OPERATOR" && token.value === "+") {
-        consume();
-        return parseFactor();
-      }
-
-      // Number literal
-      if (token.type === "NUMBER") {
-        consume();
-        return { value: token.value };
-      }
-
-      // Cell reference
-      if (token.type === "CELL_REF") {
-        consume();
-        const parsed = parseCellRef(token.value);
-        if (!parsed) {
-          return { error: "#REF!" };
-        }
-        if (parsed.row >= rows || parsed.col >= cols || parsed.row < 0 || parsed.col < 0) {
-          return { error: "#REF!" };
-        }
-        return { value: getCellValue(parsed.row, parsed.col) };
-      }
-
-      // Parenthesized expression
-      if (token.type === "LPAREN") {
-        consume();
-        const result = parseExpr();
-        if (result.error) return result;
-
-        if (!peek() || peek().type !== "RPAREN") {
-          return { error: "#ERROR!" };
-        }
-        consume();
-        return result;
-      }
-
-      return { error: "#ERROR!" };
-    }
-
-    const result = parseExpr();
-
-    // Check for leftover tokens (malformed expression)
-    if (!result.error && pos < tokens.length) {
-      return { error: "#ERROR!" };
-    }
-
-    return result;
-  }
-
-  // Evaluate arithmetic expression string (without leading =)
-  function evaluateArithmetic(expr) {
-    const tokenResult = tokenizeArithmetic(expr);
-    if (tokenResult.error) {
-      return tokenResult.error;
-    }
-
-    if (tokenResult.tokens.length === 0) {
-      return "#ERROR!";
-    }
-
-    const evalResult = evaluateArithmeticExpr(tokenResult.tokens);
-    if (evalResult.error) {
-      return evalResult.error;
-    }
-
-    // Format result (avoid floating point display issues)
-    const value = evalResult.value;
-    if (Number.isInteger(value)) {
-      return value;
-    }
-    // Round to reasonable precision
-    return Math.round(value * 1e10) / 1e10;
-  }
-
-  // Check if expression is a valid arithmetic formula
-  function isArithmeticFormula(formula) {
-    if (!formula || !formula.startsWith("=")) return false;
-    const expr = formula.substring(1).trim();
-    if (expr.length === 0) return false;
-
-    const tokenResult = tokenizeArithmetic(expr);
-    if (tokenResult.error) return false;
-    if (tokenResult.tokens.length === 0) return false;
-
-    // Validate balanced parentheses
-    let parenDepth = 0;
-    for (const token of tokenResult.tokens) {
-      if (token.type === "LPAREN") {
-        parenDepth++;
-      } else if (token.type === "RPAREN") {
-        parenDepth--;
-        if (parenDepth < 0) return false;
-      }
-    }
-
-    return parenDepth === 0;
-  }
-
-  // Evaluate SUM(range)
-  function evaluateSUM(rangeStr) {
-    const range = parseRange(rangeStr);
-    if (!range) return "#REF!";
-
-    // Check if range is within grid bounds
-    if (range.endRow >= rows || range.endCol >= cols) return "#REF!";
-
-    let sum = 0;
-    for (let r = range.startRow; r <= range.endRow; r++) {
-      for (let c = range.startCol; c <= range.endCol; c++) {
-        sum += getCellValue(r, c);
-      }
-    }
-    return sum;
-  }
-
-  // Evaluate AVG(range)
-  function evaluateAVG(rangeStr) {
-    const range = parseRange(rangeStr);
-    if (!range) return "#REF!";
-
-    // Check if range is within grid bounds
-    if (range.endRow >= rows || range.endCol >= cols) return "#REF!";
-
-    let sum = 0;
-    let count = 0;
-    for (let r = range.startRow; r <= range.endRow; r++) {
-      for (let c = range.startCol; c <= range.endCol; c++) {
-        const raw = data[r][c];
-        if (raw === null || raw === undefined) continue;
-        const stripped = String(raw)
-          .replace(/<[^>]*>/g, "")
-          .trim();
-        if (stripped === "") continue;
-        const num = parseFloat(stripped);
-        if (isNaN(num)) continue;
-        sum += num;
-        count++;
-      }
-    }
-    return count === 0 ? 0 : sum / count;
-  }
-
-  // Main formula evaluator
-  function evaluateFormula(formula) {
-    if (!formula || !formula.startsWith("=")) return formula;
-
-    const expr = formula.substring(1).trim();
-    const exprUpper = expr.toUpperCase();
-
-    // Match SUM(range)
-    const sumMatch = exprUpper.match(/^SUM\(([A-Z]+\d+:[A-Z]+\d+)\)$/);
-    if (sumMatch) {
-      return evaluateSUM(sumMatch[1]);
-    }
-
-    // Match AVG(range)
-    const avgMatch = exprUpper.match(/^AVG\(([A-Z]+\d+:[A-Z]+\d+)\)$/);
-    if (avgMatch) {
-      return evaluateAVG(avgMatch[1]);
-    }
-
-    // Try arithmetic expression
-    if (isArithmeticFormula(formula)) {
-      return evaluateArithmetic(expr);
-    }
-
-    // Unknown formula
-    return "#ERROR!";
-  }
 
   // Recalculate all formula cells
   function recalculateFormulas() {
@@ -734,7 +233,7 @@ import {
         for (let c = 0; c < cols; c++) {
           const formula = formulas[r][c];
           if (formula && formula.startsWith("=")) {
-            const result = String(evaluateFormula(formula));
+            const result = String(FormulaEvaluator.evaluate(formula, { getCellValue, data, rows, cols }));
             if (data[r][c] !== result) {
               data[r][c] = result;
               changed = true;
@@ -1584,7 +1083,7 @@ import {
         formulas[row][col] = rawValue;
         data[row][col] = rawValue;
 
-        updateFormulaDropdown(target, rawValue);
+        FormulaDropdownManager.update(target, rawValue);
       } else {
         // Exit formula edit mode
         formulaEditMode = false;
@@ -1594,7 +1093,7 @@ import {
         formulas[row][col] = "";
         data[row][col] = sanitizeHTML(target.innerHTML);
 
-        hideFormulaDropdown();
+        FormulaDropdownManager.hide();
 
         // Recalculate dependent formulas when regular values change
         recalculateFormulas();
@@ -1966,7 +1465,7 @@ import {
     const target = event.target;
     if (!target.classList.contains("cell-content")) return;
 
-    hideFormulaDropdown();
+    FormulaDropdownManager.hide();
 
     const row = parseInt(target.dataset.row, 10);
     const col = parseInt(target.dataset.col, 10);
@@ -1983,7 +1482,7 @@ import {
       if (rawValue.startsWith("=")) {
         // NOW evaluate the formula
         formulas[row][col] = rawValue;
-        const result = evaluateFormula(rawValue);
+        const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
         data[row][col] = String(result);
         target.innerText = String(result);
 
@@ -2066,7 +1565,7 @@ import {
         event.preventDefault();
         event.stopPropagation();
 
-        hideFormulaDropdown();
+        FormulaDropdownManager.hide();
 
         // Start range selection for formula
         formulaRangeStart = { row, col };
@@ -2189,27 +1688,27 @@ import {
   }
 
   function handleSelectionKeyDown(event) {
-    if (isFormulaDropdownOpen()) {
+    if (FormulaDropdownManager.isOpen()) {
       if (event.key === "ArrowDown") {
-        moveFormulaDropdownSelection(1);
+        FormulaDropdownManager.moveSelection(1);
         event.preventDefault();
         return;
       }
       if (event.key === "ArrowUp") {
-        moveFormulaDropdownSelection(-1);
+        FormulaDropdownManager.moveSelection(-1);
         event.preventDefault();
         return;
       }
       if (event.key === "Enter" || event.key === "Tab") {
-        const activeItem = formulaDropdownItems[formulaDropdownIndex];
-        if (activeItem) {
-          applyFormulaSuggestion(activeItem.dataset.formula);
+        const formulaName = FormulaDropdownManager.getActiveFormulaName();
+        if (formulaName) {
+          applyFormulaSuggestion(formulaName);
         }
         event.preventDefault();
         return;
       }
       if (event.key === "Escape") {
-        hideFormulaDropdown();
+        FormulaDropdownManager.hide();
         event.preventDefault();
         return;
       }
@@ -2290,7 +1789,7 @@ import {
       const rawValue = target.innerText.trim();
       if (rawValue.startsWith("=")) {
         formulas[row][col] = rawValue;
-        const result = evaluateFormula(rawValue);
+        const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
         data[row][col] = String(result);
         target.innerText = String(result);
         recalculateFormulas();
@@ -2895,6 +2394,9 @@ import {
     // Render the grid
     renderGrid();
 
+    // Initialize Formula Dropdown
+    FormulaDropdownManager.init(applyFormulaSuggestion);
+
     // Initialize Password Manager
     PasswordManager.init({
       decryptAndDecode: URLCodec.decryptAndDecode,
@@ -2937,15 +2439,15 @@ import {
     const gridWrapper = document.querySelector(".grid-wrapper");
     if (gridWrapper) {
       gridWrapper.addEventListener("scroll", function () {
-        if (isFormulaDropdownOpen() && formulaDropdownAnchor) {
-          positionFormulaDropdown(formulaDropdownAnchor);
+        if (FormulaDropdownManager.isOpen() && FormulaDropdownManager.anchor) {
+          FormulaDropdownManager.position(FormulaDropdownManager.anchor);
         }
       });
     }
 
     window.addEventListener("resize", function () {
-      if (isFormulaDropdownOpen() && formulaDropdownAnchor) {
-        positionFormulaDropdown(formulaDropdownAnchor);
+      if (FormulaDropdownManager.isOpen() && FormulaDropdownManager.anchor) {
+        FormulaDropdownManager.position(FormulaDropdownManager.anchor);
       }
     });
 
