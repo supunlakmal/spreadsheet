@@ -174,6 +174,41 @@
         }
     };
 
+    // ========== Encryption Codec (Wrapper for CryptoUtils) ==========
+    // Handles encryption prefix and provides clean interface for encrypt/decrypt
+    const EncryptionCodec = {
+        PREFIX: 'ENC:',
+
+        // Check if a URL hash represents encrypted data
+        isEncrypted(hash) {
+            return hash && hash.startsWith(this.PREFIX);
+        },
+
+        // Wrap encrypted data with the encryption prefix
+        wrap(encryptedData) {
+            return this.PREFIX + encryptedData;
+        },
+
+        // Unwrap the prefix from encrypted data
+        unwrap(prefixedData) {
+            return prefixedData.slice(this.PREFIX.length);
+        },
+
+        // Encrypt a payload string and wrap with prefix
+        async encrypt(payload, password) {
+            const encrypted = await CryptoUtils.encrypt(payload, password);
+            return this.wrap(encrypted);
+        },
+
+        // Decrypt data (handles both wrapped and unwrapped formats)
+        async decrypt(wrappedData, password) {
+            const data = this.isEncrypted(wrappedData)
+                ? this.unwrap(wrappedData)
+                : wrappedData;
+            return await CryptoUtils.decrypt(data, password);
+        }
+    };
+
     // Allowed HTML tags for sanitization (preserves basic formatting)
     const ALLOWED_TAGS = ['B', 'I', 'U', 'STRONG', 'EM', 'SPAN', 'BR'];
     const ALLOWED_SPAN_STYLES = ['font-weight', 'font-style', 'text-decoration', 'color', 'background-color'];
@@ -1423,10 +1458,105 @@
         return expanded;
     }
 
-    // Encode state to URL-safe string (includes dimensions and theme)
-    // Only includes non-empty/non-default values to minimize URL length
-    // Returns Promise if encryption is enabled
-    async function encodeState() {
+    // ========== Serialization Codec (Wrapper for minify/expand + compression) ==========
+    // Handles state serialization without encryption concerns
+    const SerializationCodec = {
+        // Serialize a state object to a compressed string
+        serialize(state) {
+            const json = JSON.stringify(minifyState(state));
+            return LZString.compressToEncodedURIComponent(json);
+        },
+
+        // Deserialize a compressed string to a state object
+        // Returns null on failure
+        deserialize(compressed) {
+            try {
+                const json = LZString.decompressFromEncodedURIComponent(compressed);
+                if (!json || json.length === 0) return null;
+                return expandState(safeJSONParse(json));
+            } catch (e) {
+                console.error('Deserialization failed:', e);
+                return null;
+            }
+        }
+    };
+
+    // ========== URL Codec (Main Wrapper - combines serialization and encryption) ==========
+    // Clean interface for encoding/decoding state to/from URL
+    const URLCodec = {
+        // Encode state to URL-ready string
+        async encode(state, options = {}) {
+            const serialized = SerializationCodec.serialize(state);
+
+            // Optionally encrypt
+            if (options.password) {
+                try {
+                    return await EncryptionCodec.encrypt(serialized, options.password);
+                } catch (e) {
+                    console.error('Encryption failed, falling back to unencrypted:', e);
+                    return serialized;
+                }
+            }
+
+            return serialized;
+        },
+
+        // Decode URL hash - returns { state } or { encrypted: true, data }
+        decode(hash) {
+            // Security check
+            if (!hash || hash.length > 100000) {
+                if (hash && hash.length > 100000) {
+                    console.warn('Hash too long, rejecting');
+                }
+                return null;
+            }
+
+            // Check for encrypted data
+            if (EncryptionCodec.isEncrypted(hash)) {
+                return {
+                    encrypted: true,
+                    data: EncryptionCodec.unwrap(hash)
+                };
+            }
+
+            // Try to deserialize
+            const state = SerializationCodec.deserialize(hash);
+            if (state) {
+                return { state };
+            }
+
+            // Try legacy format
+            return this._decodeLegacy(hash);
+        },
+
+        // Decrypt and decode an encrypted payload
+        async decryptAndDecode(encryptedData, password) {
+            const decrypted = await CryptoUtils.decrypt(encryptedData, password);
+            const state = SerializationCodec.deserialize(decrypted);
+            if (!state) {
+                throw new Error('Invalid decrypted data');
+            }
+            return state;
+        },
+
+        // Handle legacy uncompressed format
+        _decodeLegacy(hash) {
+            try {
+                // Only attempt legacy decode if it looks like valid URL-encoded JSON
+                if (hash.startsWith('%7B') || hash.startsWith('%5B') ||
+                    hash.startsWith('{') || hash.startsWith('[')) {
+                    const decoded = decodeURIComponent(hash);
+                    return { state: expandState(safeJSONParse(decoded)) };
+                }
+            } catch (e) {
+                console.warn('Legacy decode failed:', e);
+            }
+            return null;
+        }
+    };
+
+    // Build current state object (only includes non-empty/non-default values)
+    function buildCurrentState() {
         const state = {
             rows,
             cols,
@@ -1458,22 +1588,14 @@
             state.rowHeights = rowHeights;
         }
 
-        const json = JSON.stringify(minifyState(state));
-        const compressed = LZString.compressToEncodedURIComponent(json);
+        return state;
+    }
 
-        // If password is set, encrypt the compressed data
-        if (currentPassword) {
-            try {
-                const encrypted = await CryptoUtils.encrypt(compressed, currentPassword);
-                return 'ENC:' + encrypted;
-            } catch (e) {
-                console.error('Encryption failed:', e);
-                // Fall back to unencrypted if encryption fails
-                return compressed;
-            }
-        }
-
-        return compressed;
+    // Encode state to URL-safe string using URLCodec wrapper
+    // Returns Promise - uses URLCodec for serialization and optional encryption
+    async function encodeState() {
+        const state = buildCurrentState();
+        return await URLCodec.encode(state, { password: currentPassword });
     }
 
     // Safe JSON parse with prototype pollution protection
@@ -1507,44 +1629,10 @@
         return createSafeCopy(parsed);
     }
 
-    // Decode URL hash to state object
-    // Returns { encrypted: true, data: base64String } if data is encrypted
-    function decodeState(hash) {
+    // Validate and normalize a parsed state object
+    // Ensures correct dimensions, sanitizes HTML, validates formulas
+    function validateAndNormalizeState(parsed) {
         try {
-            // Security: Reject extremely long hashes (potential DoS)
-            if (hash.length > 100000) {
-                console.warn('Hash too long, rejecting');
-                return null;
-            }
-
-            // Check for encrypted data (ENC: prefix)
-            if (hash.startsWith('ENC:')) {
-                const encryptedData = hash.slice(4); // Remove "ENC:" prefix
-                return { encrypted: true, data: encryptedData };
-            }
-
-            let decoded = null;
-
-            // Try LZ-String decompression first (new format)
-            decoded = LZString.decompressFromEncodedURIComponent(hash);
-
-            // If decompression returned null/empty, try legacy format
-            if (!decoded || decoded.length === 0) {
-                // Only attempt legacy decode if it looks like valid URL-encoded JSON
-                if (hash.startsWith('%7B') || hash.startsWith('%5B') ||
-                    hash.startsWith('{') || hash.startsWith('[')) {
-                    decoded = decodeURIComponent(hash);
-                } else {
-                    // Could be invalid/corrupted LZ-String - reject
-                    console.warn('Unrecognized hash format');
-                    return null;
-                }
-            }
-
-            // Use safe JSON parsing with prototype pollution protection
-            // Expand minified keys to full names (backward compatible with both formats)
-            const parsed = expandState(safeJSONParse(decoded));
-
             // Handle new format (object with rows, cols, data)
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
                 const r = Math.min(Math.max(1, parsed.rows || DEFAULT_ROWS), MAX_ROWS);
@@ -1648,6 +1736,26 @@
                     theme: null
                 };
             }
+        } catch (e) {
+            console.warn('Failed to validate state:', e);
+        }
+        return null;
+    }
+
+    // Decode URL hash to state object using URLCodec wrapper
+    // Returns { encrypted: true, data: base64String } if data is encrypted
+    function decodeState(hash) {
+        try {
+            const result = URLCodec.decode(hash);
+            if (!result) return null;
+
+            // If encrypted, return the encrypted marker
+            if (result.encrypted) {
+                return result;
+            }
+
+            // Validate and normalize the decoded state
+            return validateAndNormalizeState(result.state);
         } catch (e) {
             console.warn('Failed to decode state from URL:', e);
         }
@@ -3229,30 +3337,30 @@ function addColumn() {
             showToast('Password protection enabled', 'success');
 
         } else if (modalMode === 'decrypt') {
-            // Decrypting loaded data
+            // Decrypting loaded data using URLCodec wrapper
             if (!pendingEncryptedData) {
                 showModalError('No encrypted data to decrypt.');
                 return;
             }
 
             try {
-                const decrypted = await CryptoUtils.decrypt(pendingEncryptedData, password);
-                const decompressed = LZString.decompressFromEncodedURIComponent(decrypted);
-                if (!decompressed) {
+                // Use URLCodec to decrypt and decode
+                const rawState = await URLCodec.decryptAndDecode(pendingEncryptedData, password);
+                if (!rawState) {
                     showModalError('Incorrect password.');
                     return;
                 }
 
-                // Expand minified keys (backward compatible with both old and new URL formats)
-                const parsed = expandState(safeJSONParse(decompressed));
-                if (!parsed) {
+                // Validate and normalize the decrypted state
+                const validatedState = validateAndNormalizeState(rawState);
+                if (!validatedState) {
                     showModalError('Incorrect password.');
                     return;
                 }
 
                 // Successfully decrypted - load the state
                 currentPassword = password;
-                applyLoadedState(parsed);
+                applyLoadedState(validatedState);
                 hidePasswordModal();
                 renderGrid();
                 updateLockButtonUI();
