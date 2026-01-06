@@ -62,38 +62,62 @@ import {
   isRowHeightsDefault,
   validateAndNormalizeState
 } from "./modules/urlManager.js";
+import {
+  getState,
+  setState,
+  setCallbacks,
+  updateUI,
+  applyGridTemplate,
+  renderGrid,
+  clearActiveHeaders,
+  setActiveHeaders,
+  setActiveHeadersForRange,
+  getSelectionBounds,
+  hasMultiSelection,
+  clearSelection,
+  updateSelectionVisuals,
+  clearSelectedCells,
+  getCellContentFromTarget,
+  addHoverRow,
+  addHoverCol,
+  removeHoverRow,
+  removeHoverCol,
+  clearHoverHighlights,
+  setHoverHighlight,
+  updateHoverFromTarget,
+  getCellFromPoint,
+  getCellContentElement,
+  getCellElement,
+  focusCellAt,
+  handleResizeStart,
+  handleResizeMove,
+  handleResizeEnd,
+  handleMouseDown,
+  handleMouseMove,
+  handleMouseLeave,
+  handleMouseUp,
+  handleTouchStart,
+  handleTouchMove,
+  handleTouchEnd,
+  addRow,
+  addColumn,
+  clearSpreadsheet
+} from "./modules/rowColManager.js";
 
 (function () {
   "use strict";
 
-  // Dynamic dimensions
-  let rows = DEFAULT_ROWS;
-  let cols = DEFAULT_COLS;
-
-  // Data model - dynamic 2D array
-  let data = createEmptyData(rows, cols);
+  // Data model - dynamic 2D array (rows/cols managed by rowColManager)
+  let data = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
 
   // Formula storage - parallel array to data
-  let formulas = createEmptyData(rows, cols);
+  let formulas = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
 
   // Cell styles - alignment, colors, and font size
-  let cellStyles = createEmptyCellStyles(rows, cols);
-  let colWidths = createDefaultColumnWidths(cols);
-  let rowHeights = createDefaultRowHeights(rows);
+  let cellStyles = createEmptyCellStyles(DEFAULT_ROWS, DEFAULT_COLS);
 
   // Debounce timer
   let debounceTimer = null;
-
-  // Active header tracking for row/column highlight
-  let activeRow = null;
-  let activeCol = null;
-
-  // Multi-cell selection state
-  let selectionStart = null; // { row, col } anchor point
-  let selectionEnd = null; // { row, col } current end
-  let isSelecting = false; // true during mouse drag
-  let hoverRow = null;
-  let hoverCol = null;
 
   // Formula range selection mode (for clicking to select ranges like Google Sheets)
   let formulaEditMode = false; // true when typing a formula
@@ -101,7 +125,6 @@ import {
   let formulaRangeStart = null; // Start of range being selected
   let formulaRangeEnd = null; // End of range being selected
   let editingCell = null; // { row, col } when editing a cell's text
-  let resizeState = null; // { type, index, startX, startY, startSize }
 
   // Encryption state
   // Encryption state handled by PasswordManager
@@ -171,6 +194,7 @@ import {
 
   // Get numeric value from cell (returns 0 for empty/non-numeric)
   function getCellValue(row, col) {
+    const { rows, cols } = getState();
     if (row < 0 || row >= rows || col < 0 || col >= cols) return 0;
     const val = data[row][col];
     if (!val || val === "") return 0;
@@ -185,6 +209,7 @@ import {
 
   // Recalculate all formula cells
   function recalculateFormulas() {
+    const { rows, cols } = getState();
     const container = document.getElementById("spreadsheet");
     const activeElement = document.activeElement;
     const maxPasses = rows * cols;
@@ -252,6 +277,7 @@ import {
   }
 
   function buildCSV() {
+    const { rows, cols } = getState();
     const lines = [];
     for (let r = 0; r < rows; r++) {
       const rowValues = [];
@@ -358,17 +384,19 @@ import {
 
     const truncated = parsedRows.length > MAX_ROWS || maxCols > MAX_COLS;
 
-    rows = nextRows;
-    cols = nextCols;
-    data = createEmptyData(rows, cols);
-    formulas = createEmptyData(rows, cols);
-    cellStyles = createEmptyCellStyles(rows, cols);
-    colWidths = createDefaultColumnWidths(cols);
-    rowHeights = createDefaultRowHeights(rows);
+    // Update state in rowColManager
+    setState("rows", nextRows);
+    setState("cols", nextCols);
+    setState("colWidths", createDefaultColumnWidths(nextCols));
+    setState("rowHeights", createDefaultRowHeights(nextRows));
 
-    for (let r = 0; r < rows; r++) {
+    data = createEmptyData(nextRows, nextCols);
+    formulas = createEmptyData(nextRows, nextCols);
+    cellStyles = createEmptyCellStyles(nextRows, nextCols);
+
+    for (let r = 0; r < nextRows; r++) {
       const sourceRow = Array.isArray(parsedRows[r]) ? parsedRows[r] : [];
-      for (let c = 0; c < cols; c++) {
+      for (let c = 0; c < nextCols; c++) {
         const raw = sourceRow[c] !== undefined ? String(sourceRow[c]) : "";
         if (raw.startsWith("=")) {
           // Security: Validate formula against whitelist before storing
@@ -425,7 +453,8 @@ import {
 
   // Build current state object (only includes non-empty/non-default values)
   function buildCurrentState() {
-    const state = {
+    const { rows, cols, colWidths, rowHeights } = getState();
+    const stateObj = {
       rows,
       cols,
       theme: isDarkMode() ? "dark" : "light",
@@ -433,30 +462,30 @@ import {
 
     // Only include data if not all empty
     if (!isDataEmpty(data)) {
-      state.data = data;
+      stateObj.data = data;
     }
 
     // Only include formulas if any exist
     if (!isFormulasEmpty(formulas)) {
-      state.formulas = formulas;
+      stateObj.formulas = formulas;
     }
 
     // Only include cell styles if any are non-default
     if (!isCellStylesDefault(cellStyles)) {
-      state.cellStyles = cellStyles;
+      stateObj.cellStyles = cellStyles;
     }
 
     // Only include colWidths if not all default
     if (!isColWidthsDefault(colWidths, cols)) {
-      state.colWidths = colWidths;
+      stateObj.colWidths = colWidths;
     }
 
     // Only include rowHeights if not all default
     if (!isRowHeightsDefault(rowHeights, rows)) {
-      state.rowHeights = rowHeights;
+      stateObj.rowHeights = rowHeights;
     }
 
-    return state;
+    return stateObj;
   }
 
   // Update URL hash without page jump
@@ -474,120 +503,6 @@ import {
     debounceTimer = setTimeout(updateURL, DEBOUNCE_DELAY);
   }
 
-  // Update button disabled states and grid size display
-  function updateUI() {
-    const addRowBtn = document.getElementById("add-row");
-    const addColBtn = document.getElementById("add-col");
-    const gridSizeEl = document.getElementById("grid-size");
-
-    if (addRowBtn) {
-      addRowBtn.disabled = rows >= MAX_ROWS;
-    }
-    if (addColBtn) {
-      addColBtn.disabled = cols >= MAX_COLS;
-    }
-    if (gridSizeEl) {
-      gridSizeEl.textContent = `${rows} × ${cols}`;
-    }
-  }
-
-  function applyGridTemplate() {
-    const container = document.getElementById("spreadsheet");
-    if (!container) return;
-
-    const columnSizes = colWidths.map((width) => `${width}px`).join(" ");
-    const rowSizes = rowHeights.map((height) => `${height}px`).join(" ");
-
-    container.style.gridTemplateColumns = `${ROW_HEADER_WIDTH}px ${columnSizes}`;
-    container.style.gridTemplateRows = `${HEADER_ROW_HEIGHT}px ${rowSizes}`;
-  }
-
-  // Render the spreadsheet grid
-  function renderGrid() {
-    const container = document.getElementById("spreadsheet");
-    if (!container) return;
-
-    // Clear selection when grid is re-rendered (e.g., adding rows/columns)
-    selectionStart = null;
-    selectionEnd = null;
-    isSelecting = false;
-    hoverRow = null;
-    hoverCol = null;
-
-    container.innerHTML = "";
-    applyGridTemplate();
-
-    // Corner cell (empty)
-    const corner = document.createElement("div");
-    corner.className = "corner-cell";
-    container.appendChild(corner);
-
-    // Column headers (A-Z) - sticky to top
-    for (let col = 0; col < cols; col++) {
-      const header = document.createElement("div");
-      header.className = "header-cell col-header";
-      header.textContent = colToLetter(col);
-      header.dataset.col = col;
-      const colResize = document.createElement("div");
-      colResize.className = "resize-handle col-resize";
-      colResize.dataset.col = col;
-      colResize.setAttribute("aria-hidden", "true");
-      header.appendChild(colResize);
-      container.appendChild(header);
-    }
-
-    // Rows
-    for (let row = 0; row < rows; row++) {
-      // Row header (1, 2, 3...) - sticky to left
-      const rowHeader = document.createElement("div");
-      rowHeader.className = "header-cell row-header";
-      rowHeader.textContent = row + 1;
-      rowHeader.dataset.row = row;
-      const rowResize = document.createElement("div");
-      rowResize.className = "resize-handle row-resize";
-      rowResize.dataset.row = row;
-      rowResize.setAttribute("aria-hidden", "true");
-      rowHeader.appendChild(rowResize);
-      container.appendChild(rowHeader);
-
-      // Data cells
-      for (let col = 0; col < cols; col++) {
-        const cell = document.createElement("div");
-        cell.className = "cell";
-
-        const contentDiv = document.createElement("div");
-        contentDiv.className = "cell-content";
-        contentDiv.contentEditable = "true";
-        contentDiv.dataset.row = row;
-        contentDiv.dataset.col = col;
-        contentDiv.innerHTML = sanitizeHTML(data[row][col]);
-        contentDiv.setAttribute("aria-label", `Cell ${colToLetter(col)}${row + 1}`);
-
-        const style = cellStyles[row][col];
-        if (style) {
-          contentDiv.style.textAlign = style.align || "";
-          contentDiv.style.color = style.color || "";
-          contentDiv.style.fontSize = style.fontSize ? `${style.fontSize}px` : "";
-          if (style.bg) {
-            cell.style.setProperty("--cell-bg", style.bg);
-          } else {
-            cell.style.removeProperty("--cell-bg");
-          }
-        } else {
-          contentDiv.style.textAlign = "";
-          contentDiv.style.color = "";
-          contentDiv.style.fontSize = "";
-          cell.style.removeProperty("--cell-bg");
-        }
-
-        cell.appendChild(contentDiv);
-        container.appendChild(cell);
-      }
-    }
-
-    updateUI();
-  }
-
   // Handle input changes
   function handleInput(event) {
     const target = event.target;
@@ -602,6 +517,7 @@ import {
       setActiveHeaders(row, col);
     }
 
+    const { rows, cols } = getState();
     if (!isNaN(row) && !isNaN(col) && row < rows && col < cols) {
       setEditingCell(row, col);
       const rawValue = target.innerText.trim();
@@ -635,323 +551,9 @@ import {
     }
   }
 
-  function clearActiveHeaders() {
-    if (activeRow !== null) {
-      const rowHeader = document.querySelector(`.row-header[data-row="${activeRow}"]`);
-      if (rowHeader) rowHeader.classList.remove(ACTIVE_HEADER_CLASS);
-    }
-    if (activeCol !== null) {
-      const colHeader = document.querySelector(`.col-header[data-col="${activeCol}"]`);
-      if (colHeader) colHeader.classList.remove(ACTIVE_HEADER_CLASS);
-    }
-    activeRow = null;
-    activeCol = null;
-  }
+  // Selection and hover functions moved to modules/rowColManager.js
 
-  function setActiveHeaders(row, col) {
-    if (activeRow === row && activeCol === col) return;
-    clearActiveHeaders();
-    activeRow = row;
-    activeCol = col;
-
-    const rowHeader = document.querySelector(`.row-header[data-row="${row}"]`);
-    if (rowHeader) rowHeader.classList.add(ACTIVE_HEADER_CLASS);
-
-    const colHeader = document.querySelector(`.col-header[data-col="${col}"]`);
-    if (colHeader) colHeader.classList.add(ACTIVE_HEADER_CLASS);
-  }
-
-  // ========== Multi-cell Selection Functions ==========
-
-  // Get normalized selection bounds (handles any drag direction)
-  function getSelectionBounds() {
-    if (!selectionStart || !selectionEnd) return null;
-    return {
-      minRow: Math.min(selectionStart.row, selectionEnd.row),
-      maxRow: Math.max(selectionStart.row, selectionEnd.row),
-      minCol: Math.min(selectionStart.col, selectionEnd.col),
-      maxCol: Math.max(selectionStart.col, selectionEnd.col),
-    };
-  }
-
-  // Check if selection spans more than one cell
-  function hasMultiSelection() {
-    if (!selectionStart || !selectionEnd) return false;
-    return selectionStart.row !== selectionEnd.row || selectionStart.col !== selectionEnd.col;
-  }
-
-  // Clear all selection state and visuals
-  function clearSelection() {
-    selectionStart = null;
-    selectionEnd = null;
-    isSelecting = false;
-
-    const container = document.getElementById("spreadsheet");
-    if (!container) return;
-
-    // Remove selection classes from all cells
-    container.querySelectorAll(".cell-selected").forEach((cell) => {
-      cell.classList.remove("cell-selected", "selection-top", "selection-bottom", "selection-left", "selection-right");
-    });
-
-    // Remove selecting mode from container
-    container.classList.remove("selecting");
-  }
-
-  // Clear content of all selected cells
-  function clearSelectedCells() {
-    if (!selectionStart || !selectionEnd) return;
-
-    const bounds = getSelectionBounds();
-    const container = document.getElementById("spreadsheet");
-
-    for (let r = bounds.minRow; r <= bounds.maxRow; r++) {
-      for (let c = bounds.minCol; c <= bounds.maxCol; c++) {
-        // Clear data and formula
-        data[r][c] = "";
-        formulas[r][c] = "";
-
-        // Update DOM
-        const cell = container.querySelector(`.cell-content[data-row="${r}"][data-col="${c}"]`);
-        if (cell) {
-          cell.innerHTML = "";
-        }
-      }
-    }
-
-    recalculateFormulas();
-    debouncedUpdateURL();
-  }
-
-  // Highlight headers for a range
-  function setActiveHeadersForRange(minRow, maxRow, minCol, maxCol) {
-    // Clear existing header highlights
-    document.querySelectorAll(`.${ACTIVE_HEADER_CLASS}`).forEach((el) => {
-      el.classList.remove(ACTIVE_HEADER_CLASS);
-    });
-
-    // Highlight all row headers in range
-    for (let r = minRow; r <= maxRow; r++) {
-      const rowHeader = document.querySelector(`.row-header[data-row="${r}"]`);
-      if (rowHeader) rowHeader.classList.add(ACTIVE_HEADER_CLASS);
-    }
-
-    // Highlight all column headers in range
-    for (let c = minCol; c <= maxCol; c++) {
-      const colHeader = document.querySelector(`.col-header[data-col="${c}"]`);
-      if (colHeader) colHeader.classList.add(ACTIVE_HEADER_CLASS);
-    }
-
-    // Update active row/col tracking
-    activeRow = minRow;
-    activeCol = minCol;
-  }
-
-  // Update visual selection on cells
-  function updateSelectionVisuals() {
-    const container = document.getElementById("spreadsheet");
-    if (!container) return;
-
-    const bounds = getSelectionBounds();
-    if (!bounds) {
-      clearSelection();
-      return;
-    }
-
-    // Clear previous selection classes
-    container.querySelectorAll(".cell-selected").forEach((cell) => {
-      cell.classList.remove("cell-selected", "selection-top", "selection-bottom", "selection-left", "selection-right");
-    });
-
-    const { minRow, maxRow, minCol, maxCol } = bounds;
-
-    // Apply selection classes to cells in range
-    for (let r = minRow; r <= maxRow; r++) {
-      for (let c = minCol; c <= maxCol; c++) {
-        const cellContent = container.querySelector(`.cell-content[data-row="${r}"][data-col="${c}"]`);
-        if (cellContent && cellContent.parentElement) {
-          const cell = cellContent.parentElement;
-          cell.classList.add("cell-selected");
-
-          // Add border classes for outer edges
-          if (r === minRow) cell.classList.add("selection-top");
-          if (r === maxRow) cell.classList.add("selection-bottom");
-          if (c === minCol) cell.classList.add("selection-left");
-          if (c === maxCol) cell.classList.add("selection-right");
-        }
-      }
-    }
-
-    // Highlight headers for the entire range
-    setActiveHeadersForRange(minRow, maxRow, minCol, maxCol);
-  }
-
-  function getCellContentFromTarget(target) {
-    if (!(target instanceof Element)) return null;
-
-    if (target.classList.contains("cell-content")) {
-      return target;
-    }
-    if (target.classList.contains("cell")) {
-      return target.querySelector(".cell-content");
-    }
-    return target.closest(".cell-content");
-  }
-
-  function addHoverRow(row) {
-    const container = document.getElementById("spreadsheet");
-    if (!container) return;
-
-    container.querySelectorAll(`.cell-content[data-row="${row}"]`).forEach((cellContent) => {
-      if (cellContent.parentElement) {
-        cellContent.parentElement.classList.add("hover-row");
-      }
-    });
-
-    const rowHeader = container.querySelector(`.row-header[data-row="${row}"]`);
-    if (rowHeader) {
-      rowHeader.classList.add("header-hover");
-    }
-  }
-
-  function addHoverCol(col) {
-    const container = document.getElementById("spreadsheet");
-    if (!container) return;
-
-    container.querySelectorAll(`.cell-content[data-col="${col}"]`).forEach((cellContent) => {
-      if (cellContent.parentElement) {
-        cellContent.parentElement.classList.add("hover-col");
-      }
-    });
-
-    const colHeader = container.querySelector(`.col-header[data-col="${col}"]`);
-    if (colHeader) {
-      colHeader.classList.add("header-hover");
-    }
-  }
-
-  function removeHoverRow(row) {
-    const container = document.getElementById("spreadsheet");
-    if (!container) return;
-
-    container.querySelectorAll(`.cell-content[data-row="${row}"]`).forEach((cellContent) => {
-      if (cellContent.parentElement) {
-        cellContent.parentElement.classList.remove("hover-row");
-      }
-    });
-
-    const rowHeader = container.querySelector(`.row-header[data-row="${row}"]`);
-    if (rowHeader) {
-      rowHeader.classList.remove("header-hover");
-    }
-  }
-
-  function removeHoverCol(col) {
-    const container = document.getElementById("spreadsheet");
-    if (!container) return;
-
-    container.querySelectorAll(`.cell-content[data-col="${col}"]`).forEach((cellContent) => {
-      if (cellContent.parentElement) {
-        cellContent.parentElement.classList.remove("hover-col");
-      }
-    });
-
-    const colHeader = container.querySelector(`.col-header[data-col="${col}"]`);
-    if (colHeader) {
-      colHeader.classList.remove("header-hover");
-    }
-  }
-
-  function clearHoverHighlights() {
-    if (hoverRow !== null) {
-      removeHoverRow(hoverRow);
-    }
-    if (hoverCol !== null) {
-      removeHoverCol(hoverCol);
-    }
-    hoverRow = null;
-    hoverCol = null;
-  }
-
-  function setHoverHighlight(row, col) {
-    if (row === hoverRow && col === hoverCol) return;
-
-    if (hoverRow !== null && hoverRow !== row) {
-      removeHoverRow(hoverRow);
-    }
-    if (hoverCol !== null && hoverCol !== col) {
-      removeHoverCol(hoverCol);
-    }
-
-    hoverRow = row;
-    hoverCol = col;
-
-    if (hoverRow !== null) {
-      addHoverRow(hoverRow);
-    }
-    if (hoverCol !== null) {
-      addHoverCol(hoverCol);
-    }
-  }
-
-  function updateHoverFromTarget(target) {
-    if (isSelecting || hasMultiSelection()) {
-      clearHoverHighlights();
-      return;
-    }
-
-    const cellContent = getCellContentFromTarget(target);
-    if (!cellContent || !cellContent.classList.contains("cell-content")) {
-      clearHoverHighlights();
-      return;
-    }
-
-    const row = parseInt(cellContent.dataset.row, 10);
-    const col = parseInt(cellContent.dataset.col, 10);
-    if (isNaN(row) || isNaN(col)) {
-      clearHoverHighlights();
-      return;
-    }
-
-    setHoverHighlight(row, col);
-  }
-
-  // Get cell coordinates from screen point
-  function getCellFromPoint(x, y) {
-    const element = document.elementFromPoint(x, y);
-    if (!element) return null;
-
-    // Check if it's a cell-content or its parent cell
-    let cellContent = element;
-    if (element.classList.contains("cell")) {
-      cellContent = element.querySelector(".cell-content");
-    }
-
-    if (!cellContent || !cellContent.classList.contains("cell-content")) return null;
-
-    const row = parseInt(cellContent.dataset.row, 10);
-    const col = parseInt(cellContent.dataset.col, 10);
-
-    if (isNaN(row) || isNaN(col)) return null;
-    return { row, col };
-  }
-
-  function getCellContentElement(row, col) {
-    return document.querySelector(`.cell-content[data-row="${row}"][data-col="${col}"]`);
-  }
-
-  function getCellElement(row, col) {
-    const cellContent = getCellContentElement(row, col);
-    return cellContent ? cellContent.parentElement : null;
-  }
-
-  function focusCellAt(row, col) {
-    const cellContent = getCellContentElement(row, col);
-    if (!cellContent) return null;
-    cellContent.focus();
-    cellContent.scrollIntoView({ block: "nearest", inline: "nearest" });
-    return cellContent;
-  }
+  // Cell positioning functions moved to modules/rowColManager.js
 
   function setEditingCell(row, col) {
     editingCell = { row, col };
@@ -1003,6 +605,7 @@ import {
     const col = parseInt(target.dataset.col, 10);
 
     // If we're in formula edit mode and currently selecting a range, don't process blur
+    const { isSelecting, rows, cols } = getState();
     if (formulaEditMode && isSelecting) {
       return;
     }
@@ -1065,159 +668,7 @@ import {
     setEditingCell(row, col);
   }
 
-  function handleMouseDown(event) {
-    // Only handle left mouse button
-    if (event.button !== 0) return;
-
-    const target = event.target;
-
-    // Check if clicking on a cell
-    let cellContent = target;
-    if (target.classList.contains("cell")) {
-      cellContent = target.querySelector(".cell-content");
-    }
-
-    if (!cellContent || !cellContent.classList.contains("cell-content")) {
-      // Clicked outside cells - clear selection
-      clearSelection();
-      return;
-    }
-
-    const row = parseInt(cellContent.dataset.row, 10);
-    const col = parseInt(cellContent.dataset.col, 10);
-
-    if (isNaN(row) || isNaN(col)) return;
-
-    const container = document.getElementById("spreadsheet");
-
-    // If in formula edit mode and clicking on a different cell
-    if (formulaEditMode && formulaEditCell) {
-      // Don't process clicks on the formula cell itself
-      if (row !== formulaEditCell.row || col !== formulaEditCell.col) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        FormulaDropdownManager.hide();
-
-        // Start range selection for formula
-        formulaRangeStart = { row, col };
-        formulaRangeEnd = { row, col };
-        isSelecting = true;
-        clearHoverHighlights();
-
-        // Show visual selection
-        selectionStart = formulaRangeStart;
-        selectionEnd = formulaRangeEnd;
-        updateSelectionVisuals();
-
-        if (container) {
-          container.classList.add("selecting");
-        }
-
-        return;
-      }
-    }
-
-    // Shift+click: extend selection from anchor
-    if (event.shiftKey && selectionStart) {
-      selectionEnd = { row, col };
-      updateSelectionVisuals();
-      event.preventDefault();
-      return;
-    }
-
-    // Start new selection
-    selectionStart = { row, col };
-    selectionEnd = { row, col };
-    isSelecting = true;
-    clearHoverHighlights();
-
-    if (container) {
-      container.classList.add("selecting");
-    }
-
-    updateSelectionVisuals();
-  }
-
-  function handleMouseMove(event) {
-    if (!isSelecting) {
-      updateHoverFromTarget(event.target);
-      return;
-    }
-
-    const cellCoords = getCellFromPoint(event.clientX, event.clientY);
-    if (!cellCoords) return;
-
-    // Only update if position changed
-    if (selectionEnd && cellCoords.row === selectionEnd.row && cellCoords.col === selectionEnd.col) {
-      return;
-    }
-
-    // If in formula edit mode, update formula range
-    if (formulaEditMode && formulaRangeStart) {
-      formulaRangeEnd = cellCoords;
-      selectionEnd = cellCoords;
-      updateSelectionVisuals();
-      event.preventDefault();
-      return;
-    }
-
-    selectionEnd = cellCoords;
-    updateSelectionVisuals();
-
-    // Prevent text selection during drag
-    event.preventDefault();
-  }
-
-  function handleMouseLeave() {
-    clearHoverHighlights();
-  }
-
-  function handleMouseUp(event) {
-    if (!isSelecting) return;
-
-    isSelecting = false;
-
-    const container = document.getElementById("spreadsheet");
-    if (container) {
-      container.classList.remove("selecting");
-    }
-
-    // If in formula edit mode, insert the range reference
-    if (formulaEditMode && formulaEditCell && formulaRangeStart) {
-      const rangeRef = buildRangeRef(formulaRangeStart.row, formulaRangeStart.col, formulaRangeEnd.row, formulaRangeEnd.col);
-
-      // Focus back on formula cell and insert range
-      formulaEditCell.element.focus();
-
-      // Use setTimeout to ensure focus is established before inserting
-      setTimeout(function () {
-        insertTextAtCursor(rangeRef);
-
-        // Update stored formula
-        formulas[formulaEditCell.row][formulaEditCell.col] = formulaEditCell.element.innerText;
-        data[formulaEditCell.row][formulaEditCell.col] = formulaEditCell.element.innerText;
-
-        // Clear formula range selection but stay in formula edit mode
-        formulaRangeStart = null;
-        formulaRangeEnd = null;
-        clearSelection();
-
-        debouncedUpdateURL();
-      }, 0);
-
-      return;
-    }
-
-    // If single cell selected, allow normal focus behavior
-    if (!hasMultiSelection()) {
-      // Let the cell receive focus for editing
-      const cellContent = document.querySelector(`.cell-content[data-row="${selectionStart.row}"][data-col="${selectionStart.col}"]`);
-      if (cellContent) {
-        cellContent.focus();
-      }
-    }
-  }
+  // Mouse handlers moved to modules/rowColManager.js
 
   function handleSelectionKeyDown(event) {
     if (FormulaDropdownManager.isOpen()) {
@@ -1246,6 +697,9 @@ import {
       }
     }
 
+    const state = getState();
+    const { rows, cols, selectionStart } = state;
+
     if (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight") {
       const target = event.target;
       if (target.classList.contains("cell-content") && !event.altKey && !event.ctrlKey && !event.metaKey) {
@@ -1268,12 +722,12 @@ import {
 
           if (event.shiftKey) {
             if (!selectionStart) {
-              selectionStart = { row, col };
+              setState("selectionStart", { row, col });
             }
-            selectionEnd = { row: nextRow, col: nextCol };
+            setState("selectionEnd", { row: nextRow, col: nextCol });
           } else {
-            selectionStart = { row: nextRow, col: nextCol };
-            selectionEnd = { row: nextRow, col: nextCol };
+            setState("selectionStart", { row: nextRow, col: nextCol });
+            setState("selectionEnd", { row: nextRow, col: nextCol });
           }
 
           updateSelectionVisuals();
@@ -1347,132 +801,7 @@ import {
     }
   }
 
-  // ========== Column/Row Resize Handlers ==========
-
-  function handleResizeStart(event) {
-    if (event.button !== 0) return;
-    if (!(event.target instanceof Element)) return;
-
-    const handle = event.target.closest(".resize-handle");
-    if (!handle) return;
-
-    const isColResize = handle.classList.contains("col-resize");
-    const indexValue = isColResize ? handle.dataset.col : handle.dataset.row;
-    const index = parseInt(indexValue, 10);
-    if (isNaN(index)) return;
-
-    event.preventDefault();
-    event.stopImmediatePropagation();
-
-    resizeState = {
-      type: isColResize ? "col" : "row",
-      index,
-      startX: event.clientX,
-      startY: event.clientY,
-      startSize: isColResize ? colWidths[index] || DEFAULT_COL_WIDTH : rowHeights[index] || DEFAULT_ROW_HEIGHT,
-    };
-
-    isSelecting = false;
-    document.body.classList.add("resizing");
-    document.body.style.cursor = isColResize ? "col-resize" : "row-resize";
-
-    document.addEventListener("mousemove", handleResizeMove);
-    document.addEventListener("mouseup", handleResizeEnd);
-  }
-
-  function handleResizeMove(event) {
-    if (!resizeState) return;
-
-    if (resizeState.type === "col") {
-      const delta = event.clientX - resizeState.startX;
-      const nextWidth = Math.max(MIN_COL_WIDTH, resizeState.startSize + delta);
-      colWidths[resizeState.index] = nextWidth;
-    } else {
-      const delta = event.clientY - resizeState.startY;
-      const nextHeight = Math.max(MIN_ROW_HEIGHT, resizeState.startSize + delta);
-      rowHeights[resizeState.index] = nextHeight;
-    }
-
-    applyGridTemplate();
-  }
-
-  function handleResizeEnd() {
-    if (!resizeState) return;
-
-    document.removeEventListener("mousemove", handleResizeMove);
-    document.removeEventListener("mouseup", handleResizeEnd);
-    document.body.classList.remove("resizing");
-    document.body.style.cursor = "";
-    resizeState = null;
-    debouncedUpdateURL();
-  }
-
-  // ========== Touch Selection Handlers ==========
-
-  function handleTouchStart(event) {
-    // Only handle single touch
-    if (event.touches.length !== 1) return;
-
-    const touch = event.touches[0];
-    const cellCoords = getCellFromPoint(touch.clientX, touch.clientY);
-
-    if (!cellCoords) {
-      clearSelection();
-      return;
-    }
-
-    // Start new selection
-    selectionStart = cellCoords;
-    selectionEnd = cellCoords;
-    isSelecting = true;
-
-    const container = document.getElementById("spreadsheet");
-    if (container) {
-      container.classList.add("selecting");
-    }
-
-    updateSelectionVisuals();
-  }
-
-  function handleTouchMove(event) {
-    if (!isSelecting) return;
-    if (event.touches.length !== 1) return;
-
-    const touch = event.touches[0];
-    const cellCoords = getCellFromPoint(touch.clientX, touch.clientY);
-
-    if (!cellCoords) return;
-
-    // Only update if position changed
-    if (selectionEnd && cellCoords.row === selectionEnd.row && cellCoords.col === selectionEnd.col) {
-      return;
-    }
-
-    selectionEnd = cellCoords;
-    updateSelectionVisuals();
-
-    // Prevent scrolling during selection
-    event.preventDefault();
-  }
-
-  function handleTouchEnd(event) {
-    if (!isSelecting) return;
-
-    isSelecting = false;
-
-    const container = document.getElementById("spreadsheet");
-    if (container) {
-      container.classList.remove("selecting");
-    }
-
-    // If single cell selected, allow focus for editing
-    if (!hasMultiSelection() && selectionStart) {
-      const cellContent = document.querySelector(`.cell-content[data-row="${selectionStart.row}"][data-col="${selectionStart.col}"]`);
-      if (cellContent) {
-        cellContent.focus();
-      }
-    }
-  }
+  // Resize and Touch handlers moved to modules/rowColManager.js
 
   function forEachTargetCell(callback) {
     const bounds = getSelectionBounds();
@@ -1495,6 +824,7 @@ import {
       }
     }
 
+    const { activeRow, activeCol } = getState();
     if (activeRow !== null && activeCol !== null) {
       callback(activeRow, activeCol);
       return true;
@@ -1627,6 +957,7 @@ import {
     // Update data after formatting
     const row = parseInt(activeElement.dataset.row, 10);
     const col = parseInt(activeElement.dataset.col, 10);
+    const { rows, cols } = getState();
     if (!isNaN(row) && !isNaN(col) && row < rows && col < cols) {
       data[row][col] = sanitizeHTML(activeElement.innerHTML);
       debouncedUpdateURL();
@@ -1643,69 +974,7 @@ import {
     document.execCommand("insertText", false, text);
   }
 
-  // Clear spreadsheet and reset to default
-  function clearSpreadsheet() {
-    if (!confirm("Clear all data and reset to 10×10 grid?")) {
-      return;
-    }
-
-    // Reset to default dimensions
-    rows = DEFAULT_ROWS;
-    cols = DEFAULT_COLS;
-    data = createEmptyData(rows, cols);
-    formulas = createEmptyData(rows, cols);
-    cellStyles = createEmptyCellStyles(rows, cols);
-    colWidths = createDefaultColumnWidths(cols);
-    rowHeights = createDefaultRowHeights(rows);
-
-    // Clear password
-    PasswordManager.setPassword(null);
-
-    // Clear any selection
-    clearSelection();
-
-    // Re-render and update URL
-    renderGrid();
-    debouncedUpdateURL();
-
-    showToast("Spreadsheet cleared", "success");
-  }
-
-  // Add a new row
-  function addRow() {
-    if (rows >= MAX_ROWS) {
-      showToast(`Maximum ${MAX_ROWS} rows allowed`, "warning");
-      return;
-    }
-    rows++;
-    data.push(Array(cols).fill(""));
-    formulas.push(Array(cols).fill(""));
-    cellStyles.push(
-      Array(cols)
-        .fill(null)
-        .map(() => createEmptyCellStyle())
-    );
-    rowHeights.push(DEFAULT_ROW_HEIGHT);
-    renderGrid();
-    debouncedUpdateURL();
-    showToast(`Row ${rows} added`, "success");
-  }
-
-  // Add a new column
-  function addColumn() {
-    if (cols >= MAX_COLS) {
-      showToast(`Maximum ${MAX_COLS} columns allowed`, "warning");
-      return;
-    }
-    cols++;
-    data.forEach((row) => row.push(""));
-    formulas.forEach((row) => row.push(""));
-    cellStyles.forEach((row) => row.push(createEmptyCellStyle()));
-    colWidths.push(DEFAULT_COL_WIDTH);
-    renderGrid();
-    debouncedUpdateURL();
-    showToast(`Column ${colToLetter(cols - 1)} added`, "success");
-  }
+  // clearSpreadsheet, addRow, addColumn moved to modules/rowColManager.js
 
   // Load state from URL on page load
   // Returns true if data loaded successfully, false if waiting for password
@@ -1719,25 +988,27 @@ import {
         if (loadedState.encrypted) {
           // delegate to PasswordManager
           PasswordManager.handleEncryptedData(loadedState.data);
-          
+
           // Initialize with default state while waiting for password
-          rows = DEFAULT_ROWS;
-          cols = DEFAULT_COLS;
-          data = createEmptyData(rows, cols);
-          cellStyles = createEmptyCellStyles(rows, cols);
-          formulas = createEmptyData(rows, cols);
-          colWidths = createDefaultColumnWidths(cols);
-          rowHeights = createDefaultRowHeights(rows);
+          setState("rows", DEFAULT_ROWS);
+          setState("cols", DEFAULT_COLS);
+          setState("colWidths", createDefaultColumnWidths(DEFAULT_COLS));
+          setState("rowHeights", createDefaultRowHeights(DEFAULT_ROWS));
+          data = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
+          cellStyles = createEmptyCellStyles(DEFAULT_ROWS, DEFAULT_COLS);
+          formulas = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
           return false;
         }
 
-        rows = loadedState.rows;
-        cols = loadedState.cols;
+        const loadedRows = loadedState.rows;
+        const loadedCols = loadedState.cols;
+        setState("rows", loadedRows);
+        setState("cols", loadedCols);
+        setState("colWidths", loadedState.colWidths || createDefaultColumnWidths(loadedCols));
+        setState("rowHeights", loadedState.rowHeights || createDefaultRowHeights(loadedRows));
         data = loadedState.data;
-        formulas = loadedState.formulas || createEmptyData(rows, cols);
-        cellStyles = loadedState.cellStyles || createEmptyCellStyles(rows, cols);
-        colWidths = loadedState.colWidths || createDefaultColumnWidths(cols);
-        rowHeights = loadedState.rowHeights || createDefaultRowHeights(rows);
+        formulas = loadedState.formulas || createEmptyData(loadedRows, loadedCols);
+        cellStyles = loadedState.cellStyles || createEmptyCellStyles(loadedRows, loadedCols);
 
         // Apply theme from URL if present
         if (loadedState.theme) {
@@ -1748,13 +1019,13 @@ import {
     }
 
     // Default state
-    rows = DEFAULT_ROWS;
-    cols = DEFAULT_COLS;
-    data = createEmptyData(rows, cols);
-    cellStyles = createEmptyCellStyles(rows, cols);
-    formulas = createEmptyData(rows, cols);
-    colWidths = createDefaultColumnWidths(cols);
-    rowHeights = createDefaultRowHeights(rows);
+    setState("rows", DEFAULT_ROWS);
+    setState("cols", DEFAULT_COLS);
+    setState("colWidths", createDefaultColumnWidths(DEFAULT_COLS));
+    setState("rowHeights", createDefaultRowHeights(DEFAULT_ROWS));
+    data = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
+    cellStyles = createEmptyCellStyles(DEFAULT_ROWS, DEFAULT_COLS);
+    formulas = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
     return true;
   }
 
@@ -1854,8 +1125,8 @@ import {
     const r = Math.min(Math.max(1, loadedState.rows || DEFAULT_ROWS), MAX_ROWS);
     const c = Math.min(Math.max(1, loadedState.cols || DEFAULT_COLS), MAX_COLS);
 
-    rows = r;
-    cols = c;
+    setState("rows", r);
+    setState("cols", c);
 
     // Process data array
     let d = loadedState.data;
@@ -1907,8 +1178,8 @@ import {
     formulas = f;
 
     cellStyles = normalizeCellStyles(loadedState.cellStyles, r, c);
-    colWidths = normalizeColumnWidths(loadedState.colWidths, c);
-    rowHeights = normalizeRowHeights(loadedState.rowHeights, r);
+    setState("colWidths", normalizeColumnWidths(loadedState.colWidths, c));
+    setState("rowHeights", normalizeRowHeights(loadedState.rowHeights, r));
 
     if (loadedState.theme) {
       applyTheme(loadedState.theme);
@@ -1917,6 +1188,29 @@ import {
 
   // Initialize the app
   function init() {
+    // Set up callbacks for rowColManager module
+    setCallbacks({
+      debouncedUpdateURL,
+      recalculateFormulas,
+      getDataArray: () => data,
+      setDataArray: (newData) => { data = newData; },
+      getFormulasArray: () => formulas,
+      setFormulasArray: (newFormulas) => { formulas = newFormulas; },
+      getCellStylesArray: () => cellStyles,
+      setCellStylesArray: (newCellStyles) => { cellStyles = newCellStyles; },
+      PasswordManager,
+      // Formula mode callbacks
+      getFormulaEditMode: () => formulaEditMode,
+      getFormulaEditCell: () => formulaEditCell,
+      setFormulaRangeStart: (val) => { formulaRangeStart = val; },
+      setFormulaRangeEnd: (val) => { formulaRangeEnd = val; },
+      getFormulaRangeStart: () => formulaRangeStart,
+      getFormulaRangeEnd: () => formulaRangeEnd,
+      buildRangeRef,
+      insertTextAtCursor,
+      FormulaDropdownManager
+    });
+
     // Load theme preference first (before any rendering)
     loadTheme();
 
