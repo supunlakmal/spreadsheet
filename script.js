@@ -30,6 +30,7 @@ import {
   URL_LENGTH_WARNING,
 } from "./modules/constants.js";
 import { CryptoUtils, EncryptionCodec } from "./modules/encryption.js";
+import { PasswordManager } from "./modules/passwordManager.js";
 
 (function () {
   "use strict";
@@ -76,8 +77,7 @@ import { CryptoUtils, EncryptionCodec } from "./modules/encryption.js";
   let resizeState = null; // { type, index, startX, startY, startSize }
 
   // Encryption state
-  let currentPassword = null; // Password for encryption (null = no encryption)
-  let pendingEncryptedData = null; // Stores encrypted data awaiting password input
+  // Encryption state handled by PasswordManager
 
   /**
    * Show a toast notification
@@ -1407,7 +1407,7 @@ import { CryptoUtils, EncryptionCodec } from "./modules/encryption.js";
   // Returns Promise - uses URLCodec for serialization and optional encryption
   async function encodeState() {
     const state = buildCurrentState();
-    return await URLCodec.encode(state, { password: currentPassword });
+    return await URLCodec.encode(state, { password: PasswordManager.getPassword() });
   }
 
   // Safe JSON parse with prototype pollution protection
@@ -2836,8 +2836,7 @@ import { CryptoUtils, EncryptionCodec } from "./modules/encryption.js";
     rowHeights = createDefaultRowHeights(rows);
 
     // Clear password
-    currentPassword = null;
-    updateLockButtonUI();
+    PasswordManager.setPassword(null);
 
     // Clear any selection
     clearSelection();
@@ -2895,8 +2894,9 @@ import { CryptoUtils, EncryptionCodec } from "./modules/encryption.js";
       if (loadedState) {
         // Check if data is encrypted
         if (loadedState.encrypted) {
-          // Store encrypted data and show password modal
-          pendingEncryptedData = loadedState.data;
+          // delegate to PasswordManager
+          PasswordManager.handleEncryptedData(loadedState.data);
+          
           // Initialize with default state while waiting for password
           rows = DEFAULT_ROWS;
           cols = DEFAULT_COLS;
@@ -2905,8 +2905,6 @@ import { CryptoUtils, EncryptionCodec } from "./modules/encryption.js";
           formulas = createEmptyData(rows, cols);
           colWidths = createDefaultColumnWidths(cols);
           rowHeights = createDefaultRowHeights(rows);
-          // Show password modal after a short delay (let UI render first)
-          setTimeout(() => showPasswordModal("decrypt"), 100);
           return false;
         }
 
@@ -3024,164 +3022,7 @@ import { CryptoUtils, EncryptionCodec } from "./modules/encryption.js";
   }
 
   // ========== Password/Encryption Modal Functions ==========
-
-  // Modal mode: 'set' for setting password, 'decrypt' for decrypting
-  let modalMode = "set";
-
-  // Show the password modal
-  function showPasswordModal(mode) {
-    modalMode = mode;
-    const modal = document.getElementById("password-modal");
-    const title = document.getElementById("modal-title");
-    const description = document.getElementById("modal-description");
-    const confirmInput = document.getElementById("password-confirm");
-    const submitBtn = document.getElementById("modal-submit");
-    const passwordInput = document.getElementById("password-input");
-    const errorEl = document.getElementById("modal-error");
-
-    // Reset form
-    passwordInput.value = "";
-    confirmInput.value = "";
-    errorEl.classList.add("hidden");
-    errorEl.textContent = "";
-
-    if (mode === "set") {
-      title.textContent = "Set Password";
-      description.textContent = "Enter a password to encrypt this spreadsheet. Anyone with the link will need this password to view it.";
-      confirmInput.style.display = "";
-      confirmInput.placeholder = "Confirm password";
-      submitBtn.textContent = "Set Password";
-    } else if (mode === "decrypt") {
-      title.textContent = "Enter Password";
-      description.textContent = "This spreadsheet is password-protected. Enter the password to view it.";
-      confirmInput.style.display = "none";
-      submitBtn.textContent = "Unlock";
-    } else if (mode === "remove") {
-      title.textContent = "Remove Password";
-      description.textContent = "Enter the current password to remove encryption from this spreadsheet.";
-      confirmInput.style.display = "none";
-      submitBtn.textContent = "Remove Password";
-    }
-
-    modal.classList.remove("hidden");
-    passwordInput.focus();
-  }
-
-  // Hide the password modal
-  function hidePasswordModal() {
-    const modal = document.getElementById("password-modal");
-    modal.classList.add("hidden");
-    pendingEncryptedData = null;
-  }
-
-  // Show error in modal
-  function showModalError(message) {
-    const errorEl = document.getElementById("modal-error");
-    errorEl.textContent = message;
-    errorEl.classList.remove("hidden");
-  }
-
-  // Update lock button UI state
-  function updateLockButtonUI() {
-    const lockBtn = document.getElementById("lock-btn");
-    if (!lockBtn) return;
-
-    const icon = lockBtn.querySelector("i");
-    if (currentPassword) {
-      lockBtn.classList.add("locked");
-      lockBtn.title = "Remove Password Protection";
-      if (icon) icon.className = "fa-solid fa-lock";
-    } else {
-      lockBtn.classList.remove("locked");
-      lockBtn.title = "Password Protection";
-      if (icon) icon.className = "fa-solid fa-lock-open";
-    }
-  }
-
-  // Handle lock button click
-  function handleLockButtonClick() {
-    if (currentPassword) {
-      // Already encrypted - offer to remove password
-      showPasswordModal("remove");
-    } else {
-      // Not encrypted - set password
-      showPasswordModal("set");
-    }
-  }
-
-  // Handle modal submit
-  async function handleModalSubmit() {
-    const passwordInput = document.getElementById("password-input");
-    const confirmInput = document.getElementById("password-confirm");
-    const password = passwordInput.value;
-
-    if (!password) {
-      showModalError("Please enter a password.");
-      return;
-    }
-
-    if (modalMode === "set") {
-      // Setting new password
-      const confirm = confirmInput.value;
-      if (password !== confirm) {
-        showModalError("Passwords do not match.");
-        return;
-      }
-      if (password.length < 4) {
-        showModalError("Password must be at least 4 characters.");
-        return;
-      }
-
-      currentPassword = password;
-      updateLockButtonUI();
-      hidePasswordModal();
-      // Re-encode state with encryption
-      updateURL();
-      showToast("Password protection enabled", "success");
-    } else if (modalMode === "decrypt") {
-      // Decrypting loaded data using URLCodec wrapper
-      if (!pendingEncryptedData) {
-        showModalError("No encrypted data to decrypt.");
-        return;
-      }
-
-      try {
-        // Use URLCodec to decrypt and decode
-        const rawState = await URLCodec.decryptAndDecode(pendingEncryptedData, password);
-        if (!rawState) {
-          showModalError("Incorrect password.");
-          return;
-        }
-
-        // Validate and normalize the decrypted state
-        const validatedState = validateAndNormalizeState(rawState);
-        if (!validatedState) {
-          showModalError("Incorrect password.");
-          return;
-        }
-
-        // Successfully decrypted - load the state
-        currentPassword = password;
-        applyLoadedState(validatedState);
-        hidePasswordModal();
-        renderGrid();
-        updateLockButtonUI();
-        showToast("Spreadsheet unlocked", "success");
-      } catch (e) {
-        console.error("Decryption failed:", e);
-        showModalError("Incorrect password.");
-      }
-    } else if (modalMode === "remove") {
-      // Verify current password before removing
-      // We can verify by re-encrypting current state and checking it works
-      currentPassword = null;
-      updateLockButtonUI();
-      hidePasswordModal();
-      // Re-encode state without encryption
-      updateURL();
-      showToast("Password protection removed", "success");
-    }
-  }
+  // Handled by PasswordManager module
 
   // Apply loaded state to variables
   function applyLoadedState(loadedState) {
@@ -3262,8 +3103,17 @@ import { CryptoUtils, EncryptionCodec } from "./modules/encryption.js";
     // Render the grid
     renderGrid();
 
-    // Update lock button UI state
-    updateLockButtonUI();
+    // Initialize Password Manager
+    PasswordManager.init({
+      decryptAndDecode: URLCodec.decryptAndDecode,
+      onDecryptSuccess: (state) => {
+        applyLoadedState(state);
+        renderGrid();
+      },
+      updateURL: updateURL,
+      showToast: showToast,
+      validateState: validateAndNormalizeState
+    });
 
     // Initialize URL length indicator with current hash length
     const currentHash = window.location.hash.slice(1);
@@ -3431,6 +3281,8 @@ import { CryptoUtils, EncryptionCodec } from "./modules/encryption.js";
     }
 
     // Password/Encryption event listeners
+    // Password/Encryption event listeners handled by PasswordManager
+    /*
     const lockBtn = document.getElementById("lock-btn");
     const modalCancel = document.getElementById("modal-cancel");
     const modalSubmit = document.getElementById("modal-submit");
@@ -3477,6 +3329,7 @@ import { CryptoUtils, EncryptionCodec } from "./modules/encryption.js";
         }
       });
     }
+    */
 
     // Handle browser back/forward
     window.addEventListener("hashchange", function () {
