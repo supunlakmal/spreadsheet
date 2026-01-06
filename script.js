@@ -27,6 +27,22 @@
     const URL_LENGTH_CRITICAL = 8000;  // Red - some browsers may fail
     const URL_LENGTH_MAX_DISPLAY = 10000; // For progress bar scaling
 
+    // Key minification mapping for URL compression
+    const KEY_MAP = {
+        rows: 'r', cols: 'c', theme: 't', data: 'd',
+        formulas: 'f', cellStyles: 's', colWidths: 'w', rowHeights: 'h'
+    };
+    const KEY_MAP_REVERSE = Object.fromEntries(
+        Object.entries(KEY_MAP).map(([k, v]) => [v, k])
+    );
+
+    const STYLE_KEY_MAP = {
+        align: 'a', bg: 'b', color: 'c', fontSize: 'z'
+    };
+    const STYLE_KEY_MAP_REVERSE = Object.fromEntries(
+        Object.entries(STYLE_KEY_MAP).map(([k, v]) => [v, k])
+    );
+
     const FORMULA_SUGGESTIONS = [
         { name: 'SUM', signature: 'SUM(range)', description: 'Adds numbers in a range' },
         { name: 'AVG', signature: 'AVG(range)', description: 'Average of numbers in a range' }
@@ -1350,6 +1366,63 @@
         return heights.every(h => h === DEFAULT_ROW_HEIGHT);
     }
 
+    // Minify state object keys for smaller URL payload
+    function minifyState(state) {
+        const minified = {};
+        for (const [key, value] of Object.entries(state)) {
+            const shortKey = KEY_MAP[key] || key;
+            if (key === 'cellStyles' && value) {
+                // Minify nested cell style objects
+                minified[shortKey] = value.map(row =>
+                    row.map(cell => {
+                        if (!cell || typeof cell !== 'object') return null;
+                        const minCell = {};
+                        for (const [styleKey, styleVal] of Object.entries(cell)) {
+                            if (styleVal !== '') { // Only include non-empty values
+                                minCell[STYLE_KEY_MAP[styleKey] || styleKey] = styleVal;
+                            }
+                        }
+                        return Object.keys(minCell).length > 0 ? minCell : null;
+                    })
+                );
+            } else {
+                minified[shortKey] = value;
+            }
+        }
+        return minified;
+    }
+
+    // Expand minified state keys back to full names (backward compatible)
+    function expandState(minified) {
+        // Handle null, non-objects, and arrays (legacy format) - return as-is
+        if (!minified || typeof minified !== 'object' || Array.isArray(minified)) {
+            return minified;
+        }
+        const expanded = {};
+        for (const [key, value] of Object.entries(minified)) {
+            const fullKey = KEY_MAP_REVERSE[key] || key;
+            if ((fullKey === 'cellStyles' || key === 's') && value) {
+                // Expand nested cell style objects
+                expanded.cellStyles = value.map(row =>
+                    row.map(cell => {
+                        if (!cell || typeof cell !== 'object') {
+                            return { align: '', bg: '', color: '', fontSize: '' };
+                        }
+                        return {
+                            align: cell.a || cell.align || '',
+                            bg: cell.b || cell.bg || '',
+                            color: cell.c || cell.color || '',
+                            fontSize: cell.z || cell.fontSize || ''
+                        };
+                    })
+                );
+            } else {
+                expanded[fullKey] = value;
+            }
+        }
+        return expanded;
+    }
+
     // Encode state to URL-safe string (includes dimensions and theme)
     // Only includes non-empty/non-default values to minimize URL length
     // Returns Promise if encryption is enabled
@@ -1385,7 +1458,7 @@
             state.rowHeights = rowHeights;
         }
 
-        const json = JSON.stringify(state);
+        const json = JSON.stringify(minifyState(state));
         const compressed = LZString.compressToEncodedURIComponent(json);
 
         // If password is set, encrypt the compressed data
@@ -1469,7 +1542,8 @@
             }
 
             // Use safe JSON parsing with prototype pollution protection
-            const parsed = safeJSONParse(decoded);
+            // Expand minified keys to full names (backward compatible with both formats)
+            const parsed = expandState(safeJSONParse(decoded));
 
             // Handle new format (object with rows, cols, data)
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -3169,7 +3243,8 @@ function addColumn() {
                     return;
                 }
 
-                const parsed = safeJSONParse(decompressed);
+                // Expand minified keys (backward compatible with both old and new URL formats)
+                const parsed = expandState(safeJSONParse(decompressed));
                 if (!parsed) {
                     showModalError('Incorrect password.');
                     return;
