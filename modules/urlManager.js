@@ -181,27 +181,184 @@ function safeJSONParse(jsonString) {
   return createSafeCopy(parsed);
 }
 
+// ========== Sparse Array Conversion Helpers ==========
+
+// Detect whether an array is in sparse format [[row,col,val],...] or dense format [[val1,val2],...]
+function detectArrayFormat(array) {
+  if (!array || array.length === 0) return "empty";
+
+  const first = array[0];
+  if (!Array.isArray(first)) return "invalid";
+
+  // Sparse format signature: first element is [number, number, anything]
+  // Dense format signature: first element is array of values (strings/objects)
+  if (first.length === 3 &&
+      typeof first[0] === "number" &&
+      typeof first[1] === "number" &&
+      Number.isInteger(first[0]) &&
+      Number.isInteger(first[1])) {
+    return "sparse";
+  }
+
+  return "dense";
+}
+
+// Convert dense 2D array to sparse triplet array [[row, col, value], ...]
+function convertToSparse(array2D) {
+  if (!array2D || !Array.isArray(array2D)) return undefined;
+
+  const sparse = [];
+  for (let r = 0; r < array2D.length; r++) {
+    const row = array2D[r];
+    if (!Array.isArray(row)) continue;
+
+    for (let c = 0; c < row.length; c++) {
+      const val = row[c];
+      // Only include non-empty values
+      if (val !== "") {
+        sparse.push([r, c, val]);
+      }
+    }
+  }
+
+  return sparse.length > 0 ? sparse : undefined;
+}
+
+// Convert sparse triplet array to dense 2D array
+function expandFromSparse(sparse, rows, cols, emptyValue = "") {
+  // Initialize dense array with empty values
+  const dense = Array(rows).fill(null).map(() => Array(cols).fill(emptyValue));
+
+  if (!sparse || sparse.length === 0) return dense;
+
+  for (const entry of sparse) {
+    // Validate triplet format
+    if (!Array.isArray(entry) || entry.length !== 3) {
+      console.warn("Invalid sparse triplet format:", entry);
+      continue;
+    }
+
+    const [r, c, val] = entry;
+
+    // Validate indices (type check and bounds check)
+    if (!Number.isInteger(r) || !Number.isInteger(c)) {
+      console.warn("Non-integer indices in sparse entry:", r, c);
+      continue;
+    }
+
+    if (r < 0 || r >= rows || c < 0 || c >= cols) {
+      console.warn("Out of bounds sparse entry (ignoring):", r, c, "grid size:", rows, "x", cols);
+      continue;
+    }
+
+    // Set value in dense array
+    dense[r][c] = val;
+  }
+
+  return dense;
+}
+
+// Convert cell styles dense 2D array to sparse format
+function convertCellStylesToSparse(styles2D) {
+  if (!styles2D || !Array.isArray(styles2D)) return undefined;
+
+  const sparse = [];
+
+  for (let r = 0; r < styles2D.length; r++) {
+    const row = styles2D[r];
+    if (!Array.isArray(row)) continue;
+
+    for (let c = 0; c < row.length; c++) {
+      const style = row[c];
+
+      // Skip default/empty styles
+      if (isCellStyleDefault(style)) continue;
+
+      // Minify non-default style (remove empty properties)
+      const minified = {};
+      for (const [key, val] of Object.entries(style)) {
+        if (val !== "") {
+          minified[STYLE_KEY_MAP[key] || key] = val;
+        }
+      }
+
+      // Only add if there are non-empty properties
+      if (Object.keys(minified).length > 0) {
+        sparse.push([r, c, minified]);
+      }
+    }
+  }
+
+  return sparse.length > 0 ? sparse : undefined;
+}
+
+// Expand cell styles from sparse format to dense 2D array
+function expandCellStylesFromSparse(sparse, rows, cols) {
+  // Initialize with default empty styles
+  const dense = createEmptyCellStyles(rows, cols);
+
+  if (!sparse || sparse.length === 0) return dense;
+
+  for (const entry of sparse) {
+    // Validate triplet format
+    if (!Array.isArray(entry) || entry.length !== 3) {
+      console.warn("Invalid sparse style triplet:", entry);
+      continue;
+    }
+
+    const [r, c, minStyle] = entry;
+
+    // Validate indices
+    if (!Number.isInteger(r) || !Number.isInteger(c)) {
+      console.warn("Non-integer indices in sparse style entry:", r, c);
+      continue;
+    }
+
+    if (r < 0 || r >= rows || c < 0 || c >= cols) {
+      console.warn("Out of bounds sparse style entry:", r, c);
+      continue;
+    }
+
+    // Expand minified style keys back to full names
+    if (minStyle && typeof minStyle === "object") {
+      dense[r][c] = {
+        align: minStyle.a || minStyle.align || "",
+        bg: minStyle.b || minStyle.bg || "",
+        color: minStyle.c || minStyle.color || "",
+        fontSize: minStyle.z || minStyle.fontSize || "",
+      };
+    }
+  }
+
+  return dense;
+}
+
+// ========== End Sparse Array Helpers ==========
+
 // Minify state object keys for smaller URL payload
 function minifyState(state) {
   const minified = {};
   for (const [key, value] of Object.entries(state)) {
     const shortKey = KEY_MAP[key] || key;
-    if (key === "cellStyles" && value) {
-      // Minify nested cell style objects
-      minified[shortKey] = value.map((row) =>
-        row.map((cell) => {
-          if (!cell || typeof cell !== "object") return null;
-          const minCell = {};
-          for (const [styleKey, styleVal] of Object.entries(cell)) {
-            if (styleVal !== "") {
-              // Only include non-empty values
-              minCell[STYLE_KEY_MAP[styleKey] || styleKey] = styleVal;
-            }
-          }
-          return Object.keys(minCell).length > 0 ? minCell : null;
-        })
-      );
-    } else {
+
+    // Convert data and formulas to sparse format
+    if ((key === "data" || key === "formulas") && Array.isArray(value)) {
+      const sparse = convertToSparse(value);
+      if (sparse !== undefined) {
+        minified[shortKey] = sparse;
+      }
+      // If sparse is undefined (no data), don't include the key at all
+    }
+    // Convert cellStyles to sparse format
+    else if (key === "cellStyles" && Array.isArray(value)) {
+      const sparse = convertCellStylesToSparse(value);
+      if (sparse !== undefined) {
+        minified[shortKey] = sparse;
+      }
+      // If sparse is undefined (no styles), don't include the key at all
+    }
+    // Pass through other keys unchanged
+    else {
       minified[shortKey] = value;
     }
   }
@@ -217,22 +374,53 @@ function expandState(minified) {
   const expanded = {};
   for (const [key, value] of Object.entries(minified)) {
     const fullKey = KEY_MAP_REVERSE[key] || key;
-    if ((fullKey === "cellStyles" || key === "s") && value) {
-      // Expand nested cell style objects
-      expanded.cellStyles = value.map((row) =>
-        row.map((cell) => {
-          if (!cell || typeof cell !== "object") {
-            return { align: "", bg: "", color: "", fontSize: "" };
-          }
-          return {
-            align: cell.a || cell.align || "",
-            bg: cell.b || cell.bg || "",
-            color: cell.c || cell.color || "",
-            fontSize: cell.z || cell.fontSize || "",
-          };
-        })
-      );
-    } else {
+
+    // Handle data: detect sparse vs dense format
+    if ((fullKey === "data" || key === "d") && Array.isArray(value)) {
+      const format = detectArrayFormat(value);
+      if (format === "sparse") {
+        // Mark as sparse for validateAndNormalizeState to expand later
+        expanded.data = { _format: "sparse", _data: value };
+      } else {
+        // Dense format (legacy) - pass through as-is
+        expanded.data = value;
+      }
+    }
+    // Handle formulas: detect sparse vs dense format
+    else if ((fullKey === "formulas" || key === "f") && Array.isArray(value)) {
+      const format = detectArrayFormat(value);
+      if (format === "sparse") {
+        expanded.formulas = { _format: "sparse", _data: value };
+      } else {
+        // Dense format (legacy) - pass through as-is
+        expanded.formulas = value;
+      }
+    }
+    // Handle cellStyles: detect sparse vs dense format
+    else if ((fullKey === "cellStyles" || key === "s") && Array.isArray(value)) {
+      const format = detectArrayFormat(value);
+      if (format === "sparse") {
+        // Mark as sparse for validateAndNormalizeState to expand later
+        expanded.cellStyles = { _format: "sparse", _data: value };
+      } else {
+        // Dense format (legacy) - expand minified style keys
+        expanded.cellStyles = value.map((row) =>
+          row.map((cell) => {
+            if (!cell || typeof cell !== "object") {
+              return { align: "", bg: "", color: "", fontSize: "" };
+            }
+            return {
+              align: cell.a || cell.align || "",
+              bg: cell.b || cell.bg || "",
+              color: cell.c || cell.color || "",
+              fontSize: cell.z || cell.fontSize || "",
+            };
+          })
+        );
+      }
+    }
+    // Pass through other keys unchanged
+    else {
       expanded[fullKey] = value;
     }
   }
@@ -343,23 +531,39 @@ export function validateAndNormalizeState(parsed) {
 
       // Validate and normalize data array
       let d = parsed.data;
-      if (Array.isArray(d)) {
-        // Ensure correct dimensions
-        d = d.slice(0, r).map((row) => {
-          if (Array.isArray(row)) {
-            return row.slice(0, c).map((cell) => sanitizeHTML(String(cell || "")));
+      // Check if data is marked as sparse format by expandState
+      if (d && typeof d === "object" && d._format === "sparse") {
+        // Sparse format: expand to dense
+        d = expandFromSparse(d._data, r, c, "");
+        // Sanitize all cells
+        d = d.map((row) => row.map((cell) => sanitizeHTML(String(cell))));
+      }
+      // Handle direct sparse array (backward compatibility - no metadata wrapper)
+      else if (Array.isArray(d)) {
+        const format = detectArrayFormat(d);
+        if (format === "sparse") {
+          // Direct sparse array without metadata wrapper
+          d = expandFromSparse(d, r, c, "");
+          d = d.map((row) => row.map((cell) => sanitizeHTML(String(cell))));
+        } else {
+          // Dense format (legacy): existing logic
+          // Ensure correct dimensions
+          d = d.slice(0, r).map((row) => {
+            if (Array.isArray(row)) {
+              return row.slice(0, c).map((cell) => sanitizeHTML(String(cell || "")));
+            }
+            return Array(c).fill("");
+          });
+          // Pad rows if needed
+          while (d.length < r) {
+            d.push(Array(c).fill(""));
           }
-          return Array(c).fill("");
-        });
-        // Pad rows if needed
-        while (d.length < r) {
-          d.push(Array(c).fill(""));
+          // Pad columns if needed
+          d = d.map((row) => {
+            while (row.length < c) row.push("");
+            return row;
+          });
         }
-        // Pad columns if needed
-        d = d.map((row) => {
-          while (row.length < c) row.push("");
-          return row;
-        });
       } else {
         d = createEmptyData(r, c);
       }
@@ -367,38 +571,99 @@ export function validateAndNormalizeState(parsed) {
       // Load formulas (backward compatible - create empty if not present)
       // Security: Validate formulas against whitelist to prevent injection
       let f = parsed.formulas;
-      if (Array.isArray(f)) {
-        f = f.slice(0, r).map((row, rowIdx) => {
-          if (Array.isArray(row)) {
-            return row.slice(0, c).map((cell, colIdx) => {
-              const formula = String(cell || "");
-              if (formula.startsWith("=")) {
-                // Validate formula against whitelist
-                if (isValidFormula(formula)) {
-                  return formula;
-                } else {
-                  // Invalid formula - convert to escaped text in data
-                  d[rowIdx][colIdx] = escapeHTML(formula);
-                  return "";
-                }
-              }
+      // Check if formulas is marked as sparse format by expandState
+      if (f && typeof f === "object" && f._format === "sparse") {
+        // Sparse format: expand to dense
+        f = expandFromSparse(f._data, r, c, "");
+        // Validate all formulas
+        f = f.map((row, rowIdx) => row.map((cell, colIdx) => {
+          const formula = String(cell);
+          if (formula.startsWith("=")) {
+            if (isValidFormula(formula)) {
               return formula;
-            });
+            } else {
+              // Invalid formula - convert to escaped text in data
+              d[rowIdx][colIdx] = escapeHTML(formula);
+              return "";
+            }
           }
-          return Array(c).fill("");
-        });
-        while (f.length < r) {
-          f.push(Array(c).fill(""));
+          return formula;
+        }));
+      }
+      // Handle direct sparse array (backward compatibility)
+      else if (Array.isArray(f)) {
+        const format = detectArrayFormat(f);
+        if (format === "sparse") {
+          // Direct sparse array without metadata wrapper
+          f = expandFromSparse(f, r, c, "");
+          // Validate all formulas
+          f = f.map((row, rowIdx) => row.map((cell, colIdx) => {
+            const formula = String(cell);
+            if (formula.startsWith("=")) {
+              if (isValidFormula(formula)) {
+                return formula;
+              } else {
+                // Invalid formula - convert to escaped text in data
+                d[rowIdx][colIdx] = escapeHTML(formula);
+                return "";
+              }
+            }
+            return formula;
+          }));
+        } else {
+          // Dense format (legacy): existing logic
+          f = f.slice(0, r).map((row, rowIdx) => {
+            if (Array.isArray(row)) {
+              return row.slice(0, c).map((cell, colIdx) => {
+                const formula = String(cell || "");
+                if (formula.startsWith("=")) {
+                  // Validate formula against whitelist
+                  if (isValidFormula(formula)) {
+                    return formula;
+                  } else {
+                    // Invalid formula - convert to escaped text in data
+                    d[rowIdx][colIdx] = escapeHTML(formula);
+                    return "";
+                  }
+                }
+                return formula;
+              });
+            }
+            return Array(c).fill("");
+          });
+          while (f.length < r) {
+            f.push(Array(c).fill(""));
+          }
+          f = f.map((row) => {
+            while (row.length < c) row.push("");
+            return row;
+          });
         }
-        f = f.map((row) => {
-          while (row.length < c) row.push("");
-          return row;
-        });
       } else {
         f = createEmptyData(r, c);
       }
 
-      const s = normalizeCellStyles(parsed.cellStyles, r, c);
+      // Handle cellStyles: detect sparse vs dense format
+      let s;
+      const parsedStyles = parsed.cellStyles;
+      if (parsedStyles && typeof parsedStyles === "object" && parsedStyles._format === "sparse") {
+        // Sparse format: expand to dense first, then normalize/validate
+        const expanded = expandCellStylesFromSparse(parsedStyles._data, r, c);
+        s = normalizeCellStyles(expanded, r, c);
+      } else if (Array.isArray(parsedStyles)) {
+        const format = detectArrayFormat(parsedStyles);
+        if (format === "sparse") {
+          // Direct sparse array without metadata wrapper
+          const expanded = expandCellStylesFromSparse(parsedStyles, r, c);
+          s = normalizeCellStyles(expanded, r, c);
+        } else {
+          // Dense format (legacy): use normalizeCellStyles directly
+          s = normalizeCellStyles(parsedStyles, r, c);
+        }
+      } else {
+        // No styles or invalid format
+        s = normalizeCellStyles(parsedStyles, r, c);
+      }
       const w = normalizeColumnWidths(parsed.colWidths, c);
       const h = normalizeRowHeights(parsed.rowHeights, r);
       return {
