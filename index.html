@@ -94,6 +94,9 @@
                     <i class="fa-solid fa-eraser"></i> Clear
                 </button>
                 <span id="grid-size" class="grid-size"><i class="fa-solid fa-grip"></i> 10 × 10</span>
+                <button id="toggle-readonly" type="button" class="format-btn" title="Toggle read-only mode">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                </button>
                 <button id="theme-toggle" type="button" class="theme-toggle" title="Toggle dark/light mode">
                     <i class="fa-solid fa-sun icon-light"></i>
                     <i class="fa-solid fa-moon icon-dark"></i>
@@ -118,6 +121,15 @@
             </div>
             <button id="scroll-right" class="scroll-btn right hidden" aria-label="Scroll right"><i
                     class="fa-solid fa-chevron-right"></i></button>
+        </div>
+        <div id="readonly-banner" class="readonly-banner hidden">
+            <div class="readonly-banner-content">
+                <i class="fa-solid fa-eye"></i>
+                <span>Read-only mode - You can view and export, but not edit</span>
+                <button id="enable-editing" type="button" class="readonly-enable-btn">
+                    Enable Editing
+                </button>
+            </div>
         </div>
         <div class="grid-wrapper">
             <div id="spreadsheet" class="spreadsheet"></div>

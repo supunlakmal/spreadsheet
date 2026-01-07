@@ -64,6 +64,9 @@ import {
   // Cell styles - alignment, colors, and font size
   let cellStyles = createEmptyCellStyles(DEFAULT_ROWS, DEFAULT_COLS);
 
+  // Read-only mode flag
+  let isReadOnly = false;
+
   // Debounce timer
   let debounceTimer = null;
 
@@ -400,6 +403,11 @@ import {
       theme: isDarkMode() ? "dark" : "light",
     };
 
+    // Only include readOnly if true (saves URL bytes)
+    if (isReadOnly) {
+      stateObj.readOnly = 1;
+    }
+
     // Only include data if not all empty
     if (!isDataEmpty(data)) {
       stateObj.data = data;
@@ -442,10 +450,86 @@ import {
     debounceTimer = setTimeout(updateURL, DEBOUNCE_DELAY);
   }
 
+  // ========== Read-Only Mode Helper Functions ==========
+
+  // Apply read-only mode UI state
+  function applyReadOnlyMode() {
+    document.body.classList.add("readonly-mode");
+
+    // Set contentEditable on all cells
+    const container = document.getElementById("spreadsheet");
+    if (container) {
+      container.querySelectorAll(".cell-content").forEach(cell => {
+        cell.contentEditable = "false";
+      });
+    }
+
+    // Update toggle button
+    const toggleBtn = document.getElementById("toggle-readonly");
+    if (toggleBtn) {
+      toggleBtn.classList.add("active");
+      const icon = toggleBtn.querySelector("i");
+      if (icon) icon.className = "fa-solid fa-eye";
+    }
+
+    // Show banner
+    const banner = document.getElementById("readonly-banner");
+    if (banner) banner.classList.remove("hidden");
+  }
+
+  // Clear read-only mode UI state
+  function clearReadOnlyMode() {
+    document.body.classList.remove("readonly-mode");
+
+    // Reset contentEditable
+    const container = document.getElementById("spreadsheet");
+    if (container) {
+      container.querySelectorAll(".cell-content").forEach(cell => {
+        cell.contentEditable = "true";
+      });
+    }
+
+    // Update toggle button
+    const toggleBtn = document.getElementById("toggle-readonly");
+    if (toggleBtn) {
+      toggleBtn.classList.remove("active");
+      const icon = toggleBtn.querySelector("i");
+      if (icon) icon.className = "fa-solid fa-pen-to-square";
+    }
+
+    // Hide banner
+    const banner = document.getElementById("readonly-banner");
+    if (banner) banner.classList.add("hidden");
+  }
+
+  // Toggle read-only mode
+  function toggleReadOnlyMode() {
+    isReadOnly = !isReadOnly;
+
+    if (isReadOnly) {
+      applyReadOnlyMode();
+      showToast("Read-only mode enabled - Share this link for view-only access", "success");
+    } else {
+      clearReadOnlyMode();
+      showToast("Edit mode enabled", "success");
+    }
+
+    // Update URL immediately (no debounce)
+    updateURL();
+  }
+
   // Handle input changes
   function handleInput(event) {
     const target = event.target;
     if (!target.classList.contains("cell-content")) return;
+
+    // GUARD: Block in read-only mode
+    if (isReadOnly) {
+      event.preventDefault();
+      target.blur();
+      showToast("Cannot edit in read-only mode", "warning");
+      return;
+    }
 
     const row = parseInt(target.dataset.row, 10);
     const col = parseInt(target.dataset.col, 10);
@@ -908,6 +992,12 @@ import {
     const target = event.target;
     if (!target.classList.contains("cell-content")) return;
 
+    // GUARD: Block in read-only mode (silent)
+    if (isReadOnly) {
+      event.preventDefault();
+      return;
+    }
+
     event.preventDefault();
     const text = event.clipboardData.getData("text/plain");
     document.execCommand("insertText", false, text);
@@ -936,6 +1026,7 @@ import {
           data = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
           cellStyles = createEmptyCellStyles(DEFAULT_ROWS, DEFAULT_COLS);
           formulas = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
+          isReadOnly = false; // Default while waiting for decrypt
           return false;
         }
 
@@ -953,6 +1044,15 @@ import {
         if (loadedState.theme) {
           applyTheme(loadedState.theme);
         }
+
+        // Load read-only mode
+        isReadOnly = loadedState.readOnly || false;
+        if (isReadOnly) {
+          applyReadOnlyMode();
+        } else {
+          clearReadOnlyMode();
+        }
+
         return true;
       }
     }
@@ -965,6 +1065,8 @@ import {
     data = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
     cellStyles = createEmptyCellStyles(DEFAULT_ROWS, DEFAULT_COLS);
     formulas = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
+    isReadOnly = false;
+    clearReadOnlyMode();
     return true;
   }
 
@@ -1347,6 +1449,21 @@ import {
     }
     if (exportCsvBtn) {
       exportCsvBtn.addEventListener("click", downloadCSV);
+    }
+
+    // Read-only mode event listeners
+    const toggleReadOnlyBtn = document.getElementById("toggle-readonly");
+    if (toggleReadOnlyBtn) {
+      toggleReadOnlyBtn.addEventListener("click", toggleReadOnlyMode);
+    }
+
+    const enableEditingBtn = document.getElementById("enable-editing");
+    if (enableEditingBtn) {
+      enableEditingBtn.addEventListener("click", function() {
+        if (isReadOnly) {
+          toggleReadOnlyMode();
+        }
+      });
     }
 
     // Password/Encryption event listeners
