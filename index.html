@@ -94,12 +94,18 @@
                     <i class="fa-solid fa-eraser"></i> Clear
                 </button>
                 <span id="grid-size" class="grid-size"><i class="fa-solid fa-grip"></i> 10 × 10</span>
+                <button id="toggle-readonly" type="button" class="format-btn" title="Toggle read-only mode">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                </button>
                 <button id="theme-toggle" type="button" class="theme-toggle" title="Toggle dark/light mode">
                     <i class="fa-solid fa-sun icon-light"></i>
                     <i class="fa-solid fa-moon icon-dark"></i>
                 </button>
                 <button id="copy-url" type="button" class="copy-btn" title="Copy URL to clipboard">
                     <i class="fa-solid fa-copy"></i>
+                </button>
+                <button id="generate-embed" type="button" class="copy-btn" title="Generate Embed Code">
+                    <i class="fa-solid fa-code"></i>
                 </button>
                 <button id="import-csv" type="button" class="copy-btn" title="Import CSV">
                     <i class="fa-solid fa-file-import"></i>
@@ -118,6 +124,15 @@
             </div>
             <button id="scroll-right" class="scroll-btn right hidden" aria-label="Scroll right"><i
                     class="fa-solid fa-chevron-right"></i></button>
+        </div>
+        <div id="readonly-banner" class="readonly-banner hidden">
+            <div class="readonly-banner-content">
+                <i class="fa-solid fa-eye"></i>
+                <span>Read-only mode - You can view and export, but not edit</span>
+                <button id="enable-editing" type="button" class="readonly-enable-btn">
+                    Enable Editing
+                </button>
+            </div>
         </div>
         <div class="grid-wrapper">
             <div id="spreadsheet" class="spreadsheet"></div>
@@ -151,6 +166,24 @@
             <div class="modal-buttons">
                 <button id="modal-cancel" type="button" class="modal-btn modal-btn-secondary">Cancel</button>
                 <button id="modal-submit" type="button" class="modal-btn modal-btn-primary">Set Password</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Embed Code Modal -->
+    <div id="embed-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3>Embed This Spreadsheet</h3>
+            <p>Copy this code to embed the spreadsheet on your website:</p>
+            <div class="embed-code-container">
+                <textarea id="embed-code-textarea" readonly></textarea>
+            </div>
+            <div class="modal-buttons">
+                <button id="embed-copy-btn" type="button" class="modal-btn modal-btn-primary">
+                    <i class="fa-solid fa-copy"></i> Copy to Clipboard
+                </button>
+                <button id="embed-close-btn" type="button" class="modal-btn modal-btn-secondary">Close</button>
             </div>
         </div>
     </div>

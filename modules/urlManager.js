@@ -675,6 +675,8 @@ export function validateAndNormalizeState(parsed) {
         colWidths: w,
         rowHeights: h,
         theme: parsed.theme || null,
+        readOnly: Boolean(parsed.readOnly),
+        embed: Boolean(parsed.embed),
       };
     }
 
@@ -702,6 +704,7 @@ export function validateAndNormalizeState(parsed) {
         colWidths: w,
         rowHeights: h,
         theme: null,
+        readOnly: false,
       };
     }
   } catch (e) {

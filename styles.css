@@ -299,6 +299,99 @@ body {
     border-radius: 4px;
 }
 
+/* ========== Read-only Mode Styles ========== */
+/* Read-only mode banner */
+.readonly-banner {
+    background: rgba(74, 144, 217, 0.1);
+    border-bottom: 1px solid rgba(74, 144, 217, 0.3);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.3s;
+}
+
+.readonly-banner.hidden {
+    display: none;
+}
+
+.readonly-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--accent-color);
+    font-size: 0.9rem;
+}
+
+.readonly-enable-btn {
+    padding: 4px 12px;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.readonly-enable-btn:hover {
+    background: var(--accent-hover);
+}
+
+/* Disable editing controls in read-only mode */
+.readonly-mode .format-btn:not(#toggle-readonly):not(#theme-toggle):not(#export-csv):not(#copy-url),
+.readonly-mode #add-row,
+.readonly-mode #add-col,
+.readonly-mode #clear-spreadsheet,
+.readonly-mode #import-csv,
+.readonly-mode #lock-btn,
+.readonly-mode .color-control,
+.readonly-mode #font-size-list {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Cell styling in read-only */
+.readonly-mode .cell-content {
+    cursor: default !important;
+}
+
+.readonly-mode .cell-content:focus {
+    outline: 2px solid rgba(74, 144, 217, 0.3);
+    outline-offset: -2px;
+}
+
+/* Toggle button active state */
+#toggle-readonly.active {
+    background: var(--accent-color) !important;
+    color: white !important;
+}
+/* ========== End Read-only Mode Styles ========== */
+
+/* ========== Embed Mode Styles ========== */
+.embed-mode .header {
+    display: none;
+}
+
+.embed-mode .status-bar {
+    display: none;
+}
+
+.embed-mode .scroll-btn {
+    display: none;
+}
+
+.embed-mode .readonly-banner {
+    display: none;
+}
+
+.embed-mode .grid-wrapper {
+    height: 100vh;
+}
+/* ========== End Embed Mode Styles ========== */
+
 .size-control {
     display: inline-flex;
     align-items: center;
@@ -1023,6 +1116,25 @@ body.resizing {
 .modal-btn-primary:disabled {
     background: var(--text-muted);
     cursor: not-allowed;
+}
+
+/* Embed modal specific styles */
+.embed-code-container {
+    margin: 16px 0;
+}
+
+#embed-code-textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    resize: vertical;
+    line-height: 1.5;
 }
 
 /* Lock button states */

@@ -38,6 +38,8 @@ export const KEY_MAP = {
   cellStyles: "s",
   colWidths: "w",
   rowHeights: "h",
+  readOnly: "ro",
+  embed: "e",
 };
 export const KEY_MAP_REVERSE = Object.fromEntries(Object.entries(KEY_MAP).map(([k, v]) => [v, k]));
 

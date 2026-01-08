@@ -64,6 +64,12 @@ import {
   // Cell styles - alignment, colors, and font size
   let cellStyles = createEmptyCellStyles(DEFAULT_ROWS, DEFAULT_COLS);
 
+  // Read-only mode flag
+  let isReadOnly = false;
+
+  // Embed mode flag
+  let isEmbedMode = false;
+
   // Debounce timer
   let debounceTimer = null;
 
@@ -400,6 +406,16 @@ import {
       theme: isDarkMode() ? "dark" : "light",
     };
 
+    // Only include readOnly if true (saves URL bytes)
+    if (isReadOnly || isEmbedMode) {
+      stateObj.readOnly = 1;
+    }
+
+    // Only include embed if true (saves URL bytes)
+    if (isEmbedMode) {
+      stateObj.embed = 1;
+    }
+
     // Only include data if not all empty
     if (!isDataEmpty(data)) {
       stateObj.data = data;
@@ -442,10 +458,144 @@ import {
     debounceTimer = setTimeout(updateURL, DEBOUNCE_DELAY);
   }
 
+  // ========== Read-Only Mode Helper Functions ==========
+
+  // Apply read-only mode UI state
+  function applyReadOnlyMode() {
+    document.body.classList.add("readonly-mode");
+
+    // Set contentEditable on all cells
+    const container = document.getElementById("spreadsheet");
+    if (container) {
+      container.querySelectorAll(".cell-content").forEach(cell => {
+        cell.contentEditable = "false";
+      });
+    }
+
+    // Update toggle button
+    const toggleBtn = document.getElementById("toggle-readonly");
+    if (toggleBtn) {
+      toggleBtn.classList.add("active");
+      const icon = toggleBtn.querySelector("i");
+      if (icon) icon.className = "fa-solid fa-eye";
+    }
+
+    // Show banner
+    const banner = document.getElementById("readonly-banner");
+    if (banner) banner.classList.remove("hidden");
+  }
+
+  // Clear read-only mode UI state
+  function clearReadOnlyMode() {
+    document.body.classList.remove("readonly-mode");
+
+    // Reset contentEditable
+    const container = document.getElementById("spreadsheet");
+    if (container) {
+      container.querySelectorAll(".cell-content").forEach(cell => {
+        cell.contentEditable = "true";
+      });
+    }
+
+    // Update toggle button
+    const toggleBtn = document.getElementById("toggle-readonly");
+    if (toggleBtn) {
+      toggleBtn.classList.remove("active");
+      const icon = toggleBtn.querySelector("i");
+      if (icon) icon.className = "fa-solid fa-pen-to-square";
+    }
+
+    // Hide banner
+    const banner = document.getElementById("readonly-banner");
+    if (banner) banner.classList.add("hidden");
+  }
+
+  // Apply embed mode UI state
+  function applyEmbedMode() {
+    document.body.classList.add("embed-mode");
+    isReadOnly = true;
+    applyReadOnlyMode();
+  }
+
+  // Clear embed mode UI state
+  function clearEmbedMode() {
+    document.body.classList.remove("embed-mode");
+  }
+
+  // Toggle read-only mode
+  function toggleReadOnlyMode() {
+    isReadOnly = !isReadOnly;
+    applyReadOnlyState(isReadOnly);
+    showToast(
+      isReadOnly
+        ? "Read-only mode enabled - Share this link for view-only access"
+        : "Edit mode enabled",
+      "success"
+    );
+
+    // Update URL immediately (no debounce)
+    updateURL();
+  }
+
+  // Generate embed code
+  async function generateEmbedCode() {
+    if (isEmbedMode) {
+      showToast("Already in embed mode. Share current URL instead.", "warning");
+      return null;
+    }
+
+    const currentState = buildCurrentState();
+    currentState.embed = 1;
+    currentState.readOnly = 1;
+
+    const encoded = await URLManager.encodeState(currentState, PasswordManager.getPassword());
+    const embedURL = window.location.origin + window.location.pathname + "#" + encoded;
+
+    if (embedURL.length > 2000) {
+      showToast("Warning: Embed URL is very long", "warning");
+    }
+
+    return `<iframe
+    src="${embedURL}"
+    width="800"
+    height="600"
+    frameborder="0"
+    style="border: 1px solid #e0e0e0; border-radius: 8px;"
+    title="Embedded Spreadsheet">
+</iframe>`;
+  }
+
+  // Show embed modal with generated code
+  async function showEmbedModal() {
+    const embedCode = await generateEmbedCode();
+    if (!embedCode) return;
+
+    const modal = document.getElementById("embed-modal");
+    const textarea = document.getElementById("embed-code-textarea");
+
+    textarea.value = embedCode;
+    modal.classList.remove("hidden");
+    textarea.select();
+  }
+
+  // Hide embed modal
+  function hideEmbedModal() {
+    const modal = document.getElementById("embed-modal");
+    modal.classList.add("hidden");
+  }
+
   // Handle input changes
   function handleInput(event) {
     const target = event.target;
     if (!target.classList.contains("cell-content")) return;
+
+    // GUARD: Block in read-only mode
+    if (isReadOnly) {
+      event.preventDefault();
+      target.blur();
+      showToast("Cannot edit in read-only mode", "warning");
+      return;
+    }
 
     const row = parseInt(target.dataset.row, 10);
     const col = parseInt(target.dataset.col, 10);
@@ -908,6 +1058,12 @@ import {
     const target = event.target;
     if (!target.classList.contains("cell-content")) return;
 
+    // GUARD: Block in read-only mode (silent)
+    if (isReadOnly) {
+      event.preventDefault();
+      return;
+    }
+
     event.preventDefault();
     const text = event.clipboardData.getData("text/plain");
     document.execCommand("insertText", false, text);
@@ -936,6 +1092,7 @@ import {
           data = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
           cellStyles = createEmptyCellStyles(DEFAULT_ROWS, DEFAULT_COLS);
           formulas = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
+          isReadOnly = false; // Default while waiting for decrypt
           return false;
         }
 
@@ -953,6 +1110,16 @@ import {
         if (loadedState.theme) {
           applyTheme(loadedState.theme);
         }
+
+        // Load read-only mode
+        applyReadOnlyState(loadedState.readOnly);
+
+        // Load embed mode
+        isEmbedMode = loadedState.embed || false;
+        if (isEmbedMode) {
+          applyEmbedMode();
+        }
+
         return true;
       }
     }
@@ -965,6 +1132,10 @@ import {
     data = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
     cellStyles = createEmptyCellStyles(DEFAULT_ROWS, DEFAULT_COLS);
     formulas = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
+    isReadOnly = false;
+    isEmbedMode = false;
+    clearReadOnlyMode();
+    clearEmbedMode();
     return true;
   }
 
@@ -1057,6 +1228,26 @@ import {
   // ========== Password/Encryption Modal Functions ==========
   // Handled by PasswordManager module
 
+  /**
+   * Apply read-only state to the spreadsheet
+   * @param {boolean} readOnlyFlag - Whether to enable read-only mode
+   */
+  function applyReadOnlyState(readOnlyFlag) {
+    // If in embed mode, always stay read-only
+    if (isEmbedMode) {
+      isReadOnly = true;
+      applyReadOnlyMode();
+      return;
+    }
+
+    isReadOnly = readOnlyFlag || false;
+    if (isReadOnly) {
+      applyReadOnlyMode();
+    } else {
+      clearReadOnlyMode();
+    }
+  }
+
   // Apply loaded state to variables
   function applyLoadedState(loadedState) {
     if (!loadedState) return;
@@ -1123,6 +1314,9 @@ import {
     if (loadedState.theme) {
       applyTheme(loadedState.theme);
     }
+
+    // Apply read-only mode if present
+    applyReadOnlyState(loadedState.readOnly);
   }
 
   // Initialize the app
@@ -1347,6 +1541,56 @@ import {
     }
     if (exportCsvBtn) {
       exportCsvBtn.addEventListener("click", downloadCSV);
+    }
+
+    // Embed mode event listeners
+    const generateEmbedBtn = document.getElementById("generate-embed");
+    if (generateEmbedBtn) {
+      generateEmbedBtn.addEventListener("click", showEmbedModal);
+    }
+
+    const embedCopyBtn = document.getElementById("embed-copy-btn");
+    if (embedCopyBtn) {
+      embedCopyBtn.addEventListener("click", async () => {
+        const textarea = document.getElementById("embed-code-textarea");
+        try {
+          await navigator.clipboard.writeText(textarea.value);
+          showToast("Embed code copied to clipboard!", "success");
+          embedCopyBtn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+          setTimeout(() => {
+            embedCopyBtn.innerHTML = '<i class="fa-solid fa-copy"></i> Copy to Clipboard';
+          }, 2000);
+        } catch (err) {
+          textarea.select();
+          document.execCommand("copy");
+          showToast("Embed code copied!", "success");
+        }
+      });
+    }
+
+    const embedCloseBtn = document.getElementById("embed-close-btn");
+    if (embedCloseBtn) {
+      embedCloseBtn.addEventListener("click", hideEmbedModal);
+    }
+
+    const embedBackdrop = document.querySelector("#embed-modal .modal-backdrop");
+    if (embedBackdrop) {
+      embedBackdrop.addEventListener("click", hideEmbedModal);
+    }
+
+    // Read-only mode event listeners
+    const toggleReadOnlyBtn = document.getElementById("toggle-readonly");
+    if (toggleReadOnlyBtn) {
+      toggleReadOnlyBtn.addEventListener("click", toggleReadOnlyMode);
+    }
+
+    const enableEditingBtn = document.getElementById("enable-editing");
+    if (enableEditingBtn) {
+      enableEditingBtn.addEventListener("click", function() {
+        if (isReadOnly) {
+          toggleReadOnlyMode();
+        }
+      });
     }
 
     // Password/Encryption event listeners
