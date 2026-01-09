@@ -596,7 +596,6 @@ import {
     if (isReadOnly) {
       event.preventDefault();
       target.blur();
-      showToast("Cannot edit in read-only mode", "warning");
       return;
     }
 
@@ -1414,6 +1413,7 @@ import {
         cellStyles = newCellStyles;
       },
       PasswordManager,
+      getReadOnlyFlag: () => isReadOnly,
       // Formula mode callbacks
       getFormulaEditMode: () => formulaEditMode,
       getFormulaEditCell: () => formulaEditCell,

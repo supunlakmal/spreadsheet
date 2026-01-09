@@ -47,6 +47,7 @@ let callbacks = {
   getCellStylesArray: null,
   setCellStylesArray: null,
   PasswordManager: null,
+  getReadOnlyFlag: null,
   // Formula mode callbacks
   getFormulaEditMode: null,
   getFormulaEditCell: null,
@@ -108,6 +109,8 @@ export function renderGrid() {
   const container = document.getElementById("spreadsheet");
   if (!container) return;
 
+  const isReadOnly = callbacks.getReadOnlyFlag ? callbacks.getReadOnlyFlag() : false;
+
   const data = callbacks.getDataArray ? callbacks.getDataArray() : [];
   const cellStyles = callbacks.getCellStylesArray ? callbacks.getCellStylesArray() : [];
 
@@ -161,7 +164,7 @@ export function renderGrid() {
 
       const contentDiv = document.createElement("div");
       contentDiv.className = "cell-content";
-      contentDiv.contentEditable = "true";
+      contentDiv.contentEditable = isReadOnly ? "false" : "true";
       contentDiv.dataset.row = row;
       contentDiv.dataset.col = col;
       contentDiv.innerHTML = sanitizeHTML(data[row] ? data[row][col] || "" : "");
