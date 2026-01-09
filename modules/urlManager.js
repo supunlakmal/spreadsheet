@@ -365,6 +365,11 @@ function minifyState(state) {
   return minified;
 }
 
+// Expose minify helper for consumers that need the hash-ready structure (e.g., JSON modal)
+export function minifyStateForExport(state) {
+  return minifyState(state);
+}
+
 // Expand minified state keys back to full names (backward compatible)
 function expandState(minified) {
   // Handle null, non-objects, and arrays (legacy format) - return as-is

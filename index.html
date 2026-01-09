@@ -107,6 +107,9 @@
                 <button id="copy-url" type="button" class="copy-btn" title="Copy URL to clipboard">
                     <i class="fa-solid fa-copy"></i>
                 </button>
+                <button id="open-json-btn" type="button" class="copy-btn" title="View/Edit raw JSON (AI bridge)">
+                    <i class="fa-solid fa-file-code"></i>
+                </button>
                 <button id="generate-embed" type="button" class="copy-btn" title="Generate Embed Code">
                     <i class="fa-solid fa-code"></i>
                 </button>
@@ -195,6 +198,29 @@
                 </button>
                 <button id="embed-close-btn" type="button" class="modal-btn modal-btn-secondary">Close</button>
             </div>
+        </div>
+    </div>
+
+    <!-- JSON Editor Modal -->
+    <div id="json-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content json-modal-content">
+            <div class="json-modal-header">
+                <h3>Raw Data (AI Bridge)</h3>
+                <button id="json-close-btn" type="button" class="modal-icon-btn" aria-label="Close JSON editor">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <p class="json-modal-subtitle">Copy this JSON to an AI to modify data.</p>
+            <div class="json-editor-wrapper">
+                <textarea id="json-editor" spellcheck="false"></textarea>
+            </div>
+            <div class="json-modal-actions">
+                <button id="json-copy-btn" type="button" class="modal-btn modal-btn-secondary">
+                    <i class="fa-solid fa-copy"></i> Copy JSON
+                </button>
+            </div>
+            <p id="json-error" class="modal-error hidden"></p>
         </div>
     </div>
 

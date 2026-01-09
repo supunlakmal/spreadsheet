@@ -6,6 +6,7 @@ import { DEBOUNCE_DELAY, DEFAULT_COLS, DEFAULT_ROWS, MAX_COLS, MAX_ROWS } from "
 import { buildRangeRef, FormulaDropdownManager, FormulaEvaluator, isValidFormula } from "./modules/formulaManager.js";
 import { PasswordManager } from "./modules/passwordManager.js";
 import { CSVManager } from "./modules/csvManager.js";
+import { JSONManager } from "./modules/jsonManager.js";
 import {
   addColumn,
   addRow,
@@ -49,13 +50,13 @@ import {
   normalizeCellStyles,
   normalizeColumnWidths,
   normalizeRowHeights,
+  minifyStateForExport,
   URLManager,
   validateAndNormalizeState,
 } from "./modules/urlManager.js";
 
 (function () {
   "use strict";
-
   // Data model - dynamic 2D array (rows/cols managed by rowColManager)
   let data = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
 
@@ -390,6 +391,7 @@ import {
   // Update URL hash without page jump
   async function updateURL() {
     const state = buildCurrentState();
+
     await URLManager.updateURL(state, PasswordManager.getPassword());
   }
 
@@ -400,7 +402,6 @@ import {
     }
     debounceTimer = setTimeout(updateURL, DEBOUNCE_DELAY);
   }
-
   // ========== Read-Only Mode Helper Functions ==========
 
   // Apply read-only mode UI state
@@ -410,7 +411,7 @@ import {
     // Set contentEditable on all cells
     const container = document.getElementById("spreadsheet");
     if (container) {
-      container.querySelectorAll(".cell-content").forEach(cell => {
+      container.querySelectorAll(".cell-content").forEach((cell) => {
         cell.contentEditable = "false";
       });
     }
@@ -435,7 +436,7 @@ import {
     // Reset contentEditable
     const container = document.getElementById("spreadsheet");
     if (container) {
-      container.querySelectorAll(".cell-content").forEach(cell => {
+      container.querySelectorAll(".cell-content").forEach((cell) => {
         cell.contentEditable = "true";
       });
     }
@@ -469,12 +470,7 @@ import {
   function toggleReadOnlyMode() {
     isReadOnly = !isReadOnly;
     applyReadOnlyState(isReadOnly);
-    showToast(
-      isReadOnly
-        ? "Read-only mode enabled - Share this link for view-only access"
-        : "Edit mode enabled",
-      "success"
-    );
+    showToast(isReadOnly ? "Read-only mode enabled - Share this link for view-only access" : "Edit mode enabled", "success");
 
     // Update URL immediately (no debounce)
     updateURL();
@@ -1332,7 +1328,14 @@ import {
       applyTheme(loadedState.theme);
     }
 
-    // Apply read-only mode if present
+    isEmbedMode = Boolean(loadedState.embed);
+    if (isEmbedMode) {
+      applyEmbedMode();
+    } else {
+      clearEmbedMode();
+    }
+
+    // Apply read-only mode if present (embed mode forces read-only)
     applyReadOnlyState(loadedState.readOnly);
   }
 
@@ -1379,6 +1382,12 @@ import {
       debouncedUpdateURL,
       showToast,
       extractPlainText,
+    });
+
+    JSONManager.init({
+      buildCurrentState: () => minifyStateForExport(buildCurrentState()),
+      recalculateFormulas,
+      showToast,
     });
 
     // Load theme preference first (before any rendering)
@@ -1618,6 +1627,25 @@ import {
       embedBackdrop.addEventListener("click", hideEmbedModal);
     }
 
+    // JSON editor modal event listeners
+    const openJSONBtn = document.getElementById("open-json-btn");
+    const jsonCloseBtn = document.getElementById("json-close-btn");
+    const jsonCopyBtn = document.getElementById("json-copy-btn");
+    const jsonBackdrop = document.querySelector("#json-modal .modal-backdrop");
+
+    if (openJSONBtn) {
+      openJSONBtn.addEventListener("click", () => JSONManager.openModal());
+    }
+    if (jsonCloseBtn) {
+      jsonCloseBtn.addEventListener("click", () => JSONManager.closeModal());
+    }
+    if (jsonBackdrop) {
+      jsonBackdrop.addEventListener("click", () => JSONManager.closeModal());
+    }
+    if (jsonCopyBtn) {
+      jsonCopyBtn.addEventListener("click", () => JSONManager.copyJSONToClipboard());
+    }
+
     // Read-only mode event listeners
     const toggleReadOnlyBtn = document.getElementById("toggle-readonly");
     if (toggleReadOnlyBtn) {
@@ -1626,7 +1654,7 @@ import {
 
     const enableEditingBtn = document.getElementById("enable-editing");
     if (enableEditingBtn) {
-      enableEditingBtn.addEventListener("click", function() {
+      enableEditingBtn.addEventListener("click", function () {
         if (isReadOnly) {
           toggleReadOnlyMode();
         }

@@ -1,211 +1,161 @@
-Based on the architectural patterns observed in the **supunlakmal/spreadsheet** repository (Vanilla JavaScript, DOM-based interaction, state stored in a central object), here is the **Extended Development Specification** for the **Smart Status Bar**.
+This is a **brilliant idea**. By exposing the raw JSON, you effectively create an **"AI Interface"** for your spreadsheet.
+
+Since the application is serverless, the "State" is just a JavaScript object. If you let the user view and edit this object as text, they can copy it to ChatGPT, ask for changes (e.g., _"Populate this with 50 fake names and emails"_), and paste the result back.
+
+Here is the **Development Specification** for the **"Raw JSON Editor / AI Bridge"**.
 
 ---
 
-# Feature Specification: Smart Status Bar (Sum / Avg / Count)
+# Feature Specification: JSON Data Editor (AI Bridge)
 
 ## 1. Overview
 
-The **Smart Status Bar** mimics the functionality of Excel/Google Sheets. When a user selects multiple cells in the grid, a fixed footer bar will automatically appear (or update) to display:
+A feature that allows users to view the current spreadsheet state as a raw JSON string in a modal. The user can:
 
-- **Sum:** Total of all numeric values.
-- **Average:** The mean of the numeric values.
-- **Count:** Total number of non-empty selected cells.
-- **Min/Max:** (Optional) The lowest and highest numbers in the selection.
+1.  **Copy** the JSON to use in LLMs (ChatGPT/Claude).
+2.  **Paste** modified JSON back into the box.
+3.  **Update** the grid instantly (which also regenerates the URL hash).
 
 ## 2. Technical Architecture
 
-### 2.1 Component Structure
-
-- **UI Layer:** A new HTML `<footer>` element fixed to the bottom of the viewport.
-- **Logic Layer:** A JavaScript function triggered by the existing `mouseup` or `selection` events.
-- **Data Source:** The feature will read from the **internal state object** (usually named `data` or derived from the DOM `innerText`), not just the raw HTML, to ensure calculation accuracy.
-
-### 2.2 Performance Constraints
-
-- **Debouncing:** Calculations must be performant. If a user selects 500 cells, the loop must run instantly.
-- **Zero Dependencies:** No external math libraries (like math.js) allowed.
-
----
+- **Data Flow:** `Grid State` <-> `JSON.stringify` <-> `Textarea` <-> `JSON.parse` <-> `Grid State`.
+- **Constraint:** The JSON must be "Pretty Printed" (indented) so it is readable by humans and LLMs.
+- **Safety:** The import function must have strict error handling to prevent the app from crashing if the user/LLM pastes invalid JSON.
 
 ## 3. Implementation Plan
 
-### 3.1 UI Changes (`index.html` & `style.css`)
+### 3.1 UI Changes (`index.html`)
 
-We need a container to display the stats. It should overlap the bottom of the sheet without hiding data (add padding to the body if necessary).
-
-**HTML:**
+We need a modal with a large text area and action buttons.
 
 ```html
-<!-- Add before </body> -->
-<div id="status-bar" class="status-bar-hidden">
-  <span class="stat-item">Count: <b id="stat-count">0</b></span>
-  <span class="stat-item">Sum: <b id="stat-sum">0</b></span>
-  <span class="stat-item">Avg: <b id="stat-avg">0</b></span>
+<!-- Add this to your HTML body -->
+<div id="json-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center;">
+    <div style="background:white; width:80%; height:80%; padding:20px; border-radius:8px; display:flex; flex-direction:column; gap:10px;">
+
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0;">🔧 Raw Data (AI Interface)</h3>
+            <button id="close-json-modal" style="background:none; border:none; font-size:20px; cursor:pointer;">&times;</button>
+        </div>
+
+        <p style="margin:0; font-size:12px; color:#666;">
+            Copy this to ChatGPT/Claude to modify data, then paste the result back here.
+        </button>
+
+        <!-- The Editor Area -->
+        <textarea id="json-input" style="flex:1; font-family:monospace; font-size:12px; padding:10px; border:1px solid #ccc;"></textarea>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button id="copy-json-btn" style="padding:8px 15px;">📋 Copy JSON</button>
+            <button id="save-json-btn" style="padding:8px 15px; background:green; color:white; border:none; cursor:pointer;">💾 Update Grid</button>
+        </div>
+
+    </div>
 </div>
 ```
 
-**CSS:**
+### 3.2 Logic Implementation (`script.js`)
 
-```css
-#status-bar {
-  position: fixed;
-  bottom: 0;
-  right: 0;
-  width: 100%;
-  background: #f8f9fa;
-  border-top: 1px solid #ccc;
-  padding: 5px 20px;
-  text-align: right;
-  font-family: sans-serif;
-  font-size: 14px;
-  z-index: 100;
-  display: none; /* Hidden by default */
-}
-
-#status-bar.active {
-  display: block;
-}
-
-.stat-item {
-  margin-left: 20px;
-  color: #333;
-}
-```
-
-### 3.2 Logic Integration (`script.js`)
-
-You need to hook into the event that handles cell selection. In this codebase, look for the mouse event handlers (likely `mouseup` or a specific function like `handleSelection`).
-
-**The Algorithm:**
-
-1.  Identify all DOM elements that currently have the class `.selected` (or `.active`).
-2.  Iterate through them and extract the raw value.
-3.  **Sanitize:** Distinguish between Text ("Apple"), Numbers ("10.5"), and Empty strings.
-4.  **Compute:** Calculate stats.
-5.  **Render:** Update the `innerHTML` of the status bar.
-
----
-
-## 4. Edge Cases & Handling (Critical Analysis)
-
-Since spreadsheets contain messy user data, these edge cases **must** be handled to prevent `NaN` errors.
-
-| Edge Case                 | Example Input        | Handling Rule                                                                                               |
-| :------------------------ | :------------------- | :---------------------------------------------------------------------------------------------------------- |
-| **Mixed Content**         | `10`, `20`, `Banana` | **Ignore Text.** The Sum is 30. The Count is 3 (or 2 depending on preference, usually count all non-empty). |
-| **Floating Point Math**   | `0.1`, `0.2`         | Javascript sums this as `0.300000004`. **Fix:** Use `result.toFixed(2)` for display to avoid ugly decimals. |
-| **Currency Symbols**      | `$100`, `€50`        | **Parse Logic:** Strip non-numeric characters before parsing. Use regex: `val.replace(/[^0-9.-]+/g,"")`.    |
-| **Empty Cells**           | `""` (Empty String)  | **Exclude:** Do not count as 0. Do not increment the "Count" metric.                                        |
-| **Date Strings**          | `2023-01-01`         | **Ignore:** Unless you implement complex date math, treat dates as Strings (ignore for Sum/Avg).            |
-| **Single Cell Selection** | User clicks 1 cell   | **Hide Bar:** The status bar should usually be hidden unless >1 cell is selected to reduce visual noise.    |
-| **Formula Cells**         | `=SUM(A1:A5)`        | **Read Value, Not Formula:** Ensure you read the _rendered_ text (result), not the input value (formula).   |
-
----
-
-## 5. Development Specs (Code Snippets)
-
-### Step 1: The Calculation Function
-
-Add this utility function to `script.js`.
+You need to integrate this with your existing `getData()` and `loadData()` functions.
 
 ```javascript
-function updateStatusBar() {
-  // 1. Get all selected cells
-  // Note: Adjust '.cell.selected' to match the actual CSS class used in the repo for highlighting
-  const selectedCells = document.querySelectorAll(".cell.selected");
+document.addEventListener("DOMContentLoaded", () => {
+  // DOM Elements
+  const modal = document.getElementById("json-modal");
+  const textarea = document.getElementById("json-input");
+  const openBtn = document.getElementById("open-json-btn"); // Add this ID to a button in your toolbar
+  const closeBtn = document.getElementById("close-json-modal");
+  const saveBtn = document.getElementById("save-json-btn");
+  const copyBtn = document.getElementById("copy-json-btn");
 
-  // UI Elements
-  const bar = document.getElementById("status-bar");
-  const elCount = document.getElementById("stat-count");
-  const elSum = document.getElementById("stat-sum");
-  const elAvg = document.getElementById("stat-avg");
+  // 1. OPEN MODAL & EXPORT DATA
+  function openModal() {
+    // Assume 'getData()' is your existing function that returns the sheet object
+    // If your app uses a global variable like 'data', use that.
+    const currentState = window.getData ? window.getData() : {};
 
-  // 2. Optimization: If 0 or 1 cell, hide bar
-  if (selectedCells.length < 2) {
-    bar.classList.remove("active");
-    return;
+    // Pretty print with 2 spaces indentation
+    textarea.value = JSON.stringify(currentState, null, 2);
+
+    modal.style.display = "flex";
   }
 
-  let sum = 0;
-  let countNumeric = 0;
-  let countTotal = 0;
+  // 2. IMPORT DATA & UPDATE GRID
+  function saveAndClose() {
+    const rawString = textarea.value;
 
-  // 3. Loop and Calculate
-  selectedCells.forEach((cell) => {
-    // Get raw value (innerText is usually safer than value for contenteditable divs)
-    let rawValue = cell.innerText || cell.textContent;
+    try {
+      // A. Validate JSON
+      const newState = JSON.parse(rawString);
 
-    // Clean whitespace
-    rawValue = rawValue.trim();
-
-    if (rawValue !== "") {
-      countTotal++; // It's not empty, so it counts
-
-      // Attempt to parse number
-      // Remove currency symbols like $, but keep negative signs and decimals
-      let cleanNumber = rawValue.replace(/[^0-9.-]+/g, "");
-      let val = parseFloat(cleanNumber);
-
-      if (!isNaN(val)) {
-        sum += val;
-        countNumeric++;
+      // B. Basic Schema Validation (Prevent crashes)
+      // Check if the object looks somewhat correct (e.g., has 'rows' or 'data')
+      if (typeof newState !== "object" || newState === null) {
+        throw new Error("Invalid Data Structure");
       }
-    }
-  });
 
-  // 4. Update UI
-  // Logic: If no numbers were selected, don't show Sum/Avg, just Count
-  if (countNumeric > 0) {
-    elSum.innerText = sum % 1 !== 0 ? sum.toFixed(2) : sum; // Show decimals only if needed
-    elAvg.innerText = (sum / countNumeric).toFixed(2);
-    elSum.parentElement.style.display = "inline";
-    elAvg.parentElement.style.display = "inline";
-  } else {
-    // Hide Sum/Avg if only text is selected
-    elSum.parentElement.style.display = "none";
-    elAvg.parentElement.style.display = "none";
+      // C. Update the Grid
+      // Assume 'loadSpreadsheet(data)' is your existing function
+      if (window.loadSpreadsheet) {
+        window.loadSpreadsheet(newState);
+      }
+
+      // D. Update URL Hash
+      // We re-encode the data to base64 to update the shareable link
+      // Assuming your app has a function to update hash, otherwise:
+      const encoded = btoa(JSON.stringify(newState));
+      window.location.hash = encoded;
+
+      modal.style.display = "none";
+      alert("Grid updated successfully!");
+    } catch (e) {
+      alert("❌ Error: Invalid JSON.\n\nPlease check your syntax. If you used ChatGPT, make sure it returned valid JSON.");
+      console.error(e);
+    }
   }
 
-  elCount.innerText = countTotal;
-  bar.classList.add("active");
-}
-```
+  // 3. COPY TO CLIPBOARD
+  function copyToClipboard() {
+    textarea.select();
+    document.execCommand("copy"); // Fallback or use Navigator API
+    // navigator.clipboard.writeText(textarea.value); // Modern way
 
-### Step 2: Hooking the Event
+    const originalText = copyBtn.innerText;
+    copyBtn.innerText = "Copied! ✅";
+    setTimeout(() => (copyBtn.innerText = originalText), 2000);
+  }
 
-You must find where the spreadsheet handles the "End of Selection".
+  // Event Listeners
+  if (openBtn) openBtn.addEventListener("click", openModal);
+  if (closeBtn) closeBtn.addEventListener("click", () => (modal.style.display = "none"));
+  if (saveBtn) saveBtn.addEventListener("click", saveAndClose);
+  if (copyBtn) copyBtn.addEventListener("click", copyToClipboard);
 
-- Look for `window.addEventListener('mouseup', ...)` or the function that runs when dragging stops.
-- Add the call to `updateStatusBar()` inside that handler.
-
-```javascript
-// Example injection point in existing code:
-document.addEventListener("mouseup", () => {
-  // ... existing selection logic ...
-
-  updateStatusBar(); // <--- Add this line
-});
-
-// Also add to keyup (in case user changes data inside a selected range)
-document.addEventListener("keyup", () => {
-  updateStatusBar();
+  // Close on background click
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.style.display = "none";
+  });
 });
 ```
-
-### Step 3: CSS Class Hook
-
-Ensure the repository actually adds a class (like `.selected`) to highlighted cells.
-
-- _If the repo uses inline styles for selection (e.g., `background: blue`),_ you will need to modify the selection logic to add a CSS class instead, or update the `querySelectorAll` logic to find cells by background color (which is messy/not recommended).
-- **Recommendation:** Modify the selection function to toggle a class named `selected`.
 
 ---
 
-## 6. Testing Protocol
+## 4. Edge Cases & AI Specific Handling
 
-1.  **Basic Math:** Select cells containing `10`, `10`, `10`. Expect: Sum `30`, Avg `10`, Count `3`.
-2.  **The "Text" Test:** Select `10`, `Apple`, `20`. Expect: Sum `30`, Count `3`.
-3.  **The "Empty" Test:** Select `10`, `[Empty]`, `20`. Expect: Sum `30`, Count `2`.
-4.  **Visual Test:** Click a single cell. Ensure the bar disappears.
-5.  **Update Test:** Select 3 cells. Change a number in one of them while it is still selected. Does the sum update instantly? (Requires the `keyup` listener).
+Since this feature is designed for LLM interaction, we need to handle specific issues that arise when pasting from AI.
+
+| Edge Case                   | Problem                                                                                                                  | Handling Strategy                                                                                                                                                                       |
+| :-------------------------- | :----------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Markdown Wrapping**       | LLMs often wrap code in triple backticks (e.g., \`\`\`json ... \`\`\`). If the user pastes this, `JSON.parse` will fail. | **Sanitization:** Before parsing, strip the markdown. <br> ` let cleanStr = rawString.replace(/```json/g, "").replace(/```/g, ""); `                                                    |
+| **Partial JSON**            | User might accidentally copy only half the JSON string.                                                                  | **Try/Catch:** The `try...catch` block in the code above handles this. Show a clear error: "Unexpected end of data".                                                                    |
+| **Huge Data Sets**          | Stringifying a massive spreadsheet might freeze the browser for a second.                                                | **No Fix Needed:** Modern browsers handle ~5MB text in textareas fine. Just be aware of the lag.                                                                                        |
+| **Structure Hallucination** | The LLM might change the key names (e.g., changing `cell_id` to `id`).                                                   | **Soft Validation:** In the `saveAndClose` function, check if critical keys exist. If they are missing, alert the user: "The JSON structure seems wrong. Did the AI change the format?" |
+
+## 5. Suggested "System Prompt" for Users
+
+To make this feature truly useful, add a small "Help" link in the modal that gives the user a prompt to copy.
+
+**Add this text to the Modal UI:**
+
+> **Tip:** When asking AI to edit this, use this prompt:
+> _"Here is the JSON data for a spreadsheet. Please keep the exact same structure and keys, but [insert request here, e.g., add 10 rows of random user data]. Return ONLY the JSON."_
