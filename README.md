@@ -22,6 +22,12 @@ A lightweight, client-only spreadsheet web application. All data persists in the
   ![Password modal before encryption](demo/password.png)
 - Unlocking an encrypted link:  
   ![Unlock modal when opening encrypted URL](demo/open.png)
+- Raw JSON (AI bridge) modal:  
+  ![Raw JSON modal for AI editing](demo/ai.png)
+- Embed code generator (read-only iframe):  
+  ![Embed modal with iframe snippet](demo/iframe.png)
+- QR code for mobile handoff:  
+  ![QR modal to open the sheet on mobile](demo/qr.png)
 
 ## Features
 
@@ -55,6 +61,7 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 - **Header Highlighting** - Row/column headers highlight for selected range
 - **Hover Highlighting** - Row/column hover highlights for quick scanning
 - **Escape to Clear** - Press Escape to deselect
+- **Selection Stats** - Status bar shows count, sum, and average for numeric ranges
 
 ### Grid Management
 
@@ -70,12 +77,26 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 - **CSV Export** - Download the current grid as `spreadsheet.csv`
 - **Formula-aware Import** - SUM/AVG formulas are preserved; unsupported formulas are imported as text
 
-### Password Protection & Sharing
+### Sharing & Access Control
+
+- **Copy Link** - One click to copy the compressed URL hash
+- **Read-only Toggle** - Share view-only links that disable editing
+- **Embed Mode** - Generate a read-only iframe snippet with a dedicated `embed` flag in the URL
+- **QR Handoff** - Show a QR code to continue editing on mobile; warns if the URL is too long
+- **URL Length Indicator** - Live character count with warning/caution/critical thresholds
+
+### Password Protection
 
 - **One-click lock** - Set a password from the toolbar lock button; password never leaves the browser
 - **AES-GCM 256 + PBKDF2** - 100k iterations with random salt/IV, stored as URL-safe Base64
 - **ENC-prefixed URLs** - Encrypted hashes use `ENC:`; recipients must unlock via modal
 - **Optional** - Unencrypted links continue to work exactly as before
+
+### AI Bridge (Raw JSON)
+
+- **Raw Data Modal** - View and copy the minified spreadsheet state as JSON for AI edits
+- **Clipboard Ready** - Copy button for quick transfer to ChatGPT/Claude
+- **Safe Export** - Uses sanitized/minified state (only non-default values) for shorter prompts
 
 ### Formula Support
 
@@ -166,6 +187,11 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 | Clear all             | Click "Clear" button (with confirmation)                   |
 | Import CSV            | Click import button and choose a .csv file                 |
 | Export CSV            | Click download button                                      |
+| Toggle read-only      | Click the pen/eye icon to switch between edit and view-only |
+| Generate embed code   | Click the `</>` button to copy an iframe snippet            |
+| Open raw JSON (AI)    | Click the file-code button to view/copy JSON                |
+| Copy URL              | Click the copy button in the toolbar                        |
+| Open on mobile (QR)   | Click the QR button to show a scannable code                |
 | Enter formula         | Type `=` followed by function (e.g., `=SUM(A1:B5)`)        |
 | Select formula range  | Click/drag cells while editing a formula                   |
 | Share                 | Click copy button to copy URL                              |
@@ -256,7 +282,14 @@ http://localhost:3000
 
 ## Recent Updates
 
-### Latest - Optional Password Protection
+### Latest - AI Bridge, Embed, and Sharing Upgrades
+
+- Added Raw Data (AI Bridge) modal to view/copy the current JSON state
+- Read-only toggle and dedicated embed mode with iframe snippet generator
+- QR handoff modal to open the sheet on mobile; warns on oversized URLs
+- Live URL length indicator plus selection count/sum/avg stats in the status bar
+
+### Optional Password Protection
 
 - Added AES-GCM (256-bit) encryption with PBKDF2 (100k iterations) for URL hashes (`ENC:` prefix)
 - Lock/unlock toolbar button with modal flows for setting, unlocking, and removing passwords
