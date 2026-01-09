@@ -884,6 +884,39 @@ body.resizing {
     color: #dc3545;
 }
 
+.status-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-left: auto;
+    justify-content: flex-end;
+}
+
+.selection-stats {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    font-size: inherit;
+}
+
+.selection-stats.active {
+    display: inline-flex;
+}
+
+.selection-stats .stat-item {
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.selection-stats b {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.url-length-indicator {
+    margin-left: auto;
+}
+
 /* Mobile/Tablet: Bottom toolbar with horizontal scroll */
 @media (max-width: 1024px) {
     /* Hide title completely */

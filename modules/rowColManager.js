@@ -58,6 +58,7 @@ let callbacks = {
   buildRangeRef: null,
   insertTextAtCursor: null,
   FormulaDropdownManager: null,
+  onSelectionChange: null,
 };
 
 // ========== State Accessors ==========
@@ -120,6 +121,9 @@ export function renderGrid() {
   state.isSelecting = false;
   state.hoverRow = null;
   state.hoverCol = null;
+  if (callbacks.onSelectionChange) {
+    callbacks.onSelectionChange(null);
+  }
 
   container.innerHTML = "";
   applyGridTemplate();
@@ -276,6 +280,10 @@ export function clearSelection() {
 
   // Remove selecting mode from container
   container.classList.remove("selecting");
+
+  if (callbacks.onSelectionChange) {
+    callbacks.onSelectionChange(null);
+  }
 }
 
 export function updateSelectionVisuals() {
@@ -314,6 +322,10 @@ export function updateSelectionVisuals() {
 
   // Highlight headers for the entire range
   setActiveHeadersForRange(minRow, maxRow, minCol, maxCol);
+
+  if (callbacks.onSelectionChange) {
+    callbacks.onSelectionChange({ ...bounds });
+  }
 }
 
 export function clearSelectedCells() {
@@ -340,6 +352,9 @@ export function clearSelectedCells() {
 
   if (callbacks.recalculateFormulas) callbacks.recalculateFormulas();
   if (callbacks.debouncedUpdateURL) callbacks.debouncedUpdateURL();
+  if (callbacks.onSelectionChange) {
+    callbacks.onSelectionChange(getSelectionBounds());
+  }
 }
 
 // ========== Hover Functions ==========

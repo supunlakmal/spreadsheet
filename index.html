@@ -144,12 +144,19 @@
             <div class="status-hint">
                 <i class="fa-solid fa-link"></i> Data is saved in the URL - share the link to share your spreadsheet
             </div>
-            <div class="url-length-indicator">
-                <span class="url-length-label">URL: <span id="url-length-value">0</span> chars</span>
-                <div class="url-progress-container" title="URL length indicator">
-                    <div id="url-progress-bar" class="url-progress-bar"></div>
+            <div class="status-bar-right">
+                <div id="selection-status" class="selection-stats" aria-live="polite">
+                    <span class="stat-item">Count: <b id="stat-count">0</b></span>
+                    <span class="stat-item stat-sum">Sum: <b id="stat-sum">0</b></span>
+                    <span class="stat-item stat-avg">Avg: <b id="stat-avg">0</b></span>
                 </div>
-                <span id="url-length-message" class="url-length-message"></span>
+                <div class="url-length-indicator">
+                    <span class="url-length-label">URL: <span id="url-length-value">0</span> chars</span>
+                    <div class="url-progress-container" title="URL length indicator">
+                        <div id="url-progress-bar" class="url-progress-bar"></div>
+                    </div>
+                    <span id="url-length-message" class="url-length-message"></span>
+                </div>
             </div>
         </div>
     </div>
