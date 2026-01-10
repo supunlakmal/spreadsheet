@@ -11,6 +11,38 @@
 - `s`: cell styles as sparse triplets `[row, col, styleObject]` where style keys are minified: `a` align, `b` background color, `c` text color, `z` font size (px).
 - `w`: column widths array (length = `c`). Defaults are omitted, so presence here means custom widths.
 
+## Supported Formulas
+
+All formulas must start with `=`. The app supports:
+
+### Range Functions
+| Function | Syntax | Description |
+|----------|--------|-------------|
+| `SUM` | `=SUM(A1:B5)` | Adds all numbers in the range |
+| `AVG` | `=AVG(A1:B5)` | Average of non-empty numeric cells in range |
+
+### Arithmetic Expressions
+Cell references and basic math with proper operator precedence:
+- **Cell references**: `=A1`, `=B2`, `=AA99`
+- **Operators**: `+` `-` `*` `/`
+- **Parentheses**: `=(A1+B1)/2`
+- **Unary**: `=-A1`, `=+B2`
+
+Examples:
+```
+=A1+B1
+=A1*B2-C3
+=(A1+A2+A3)/3
+=B5*1.15
+```
+
+### Error Codes
+| Code | Meaning |
+|------|---------|
+| `#DIV/0!` | Division by zero |
+| `#REF!` | Invalid or out-of-bounds cell reference |
+| `#ERROR!` | Malformed expression or unknown formula |
+
 ## How to Read It
 1) Treat `d`, `f`, and `s` as sparse arrays—build an empty `r x c` grid first, then set only the listed coordinates.
 2) Expand style keys: `{ "b": "#ffee00", "c": "#000000" }` ⇒ `{ bg: "#ffee00", color: "#000000" }`.
