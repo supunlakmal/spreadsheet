@@ -87,10 +87,15 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 
 ### Live Collaboration (Beta)
 
-- **Peer-to-peer via PeerJS** - Browser-to-browser sync; no backend server required
+- **Peer-to-peer via PeerJS** - Browser-to-browser sync using WebRTC data channels
+- **TURN Server Support** - Metered.ca TURN servers for NAT traversal; credentials fetched securely via Netlify Function
 - **1-to-1 only** - One host and one joiner at a time (extra peers are rejected)
-- **CSP/network requirement** - Allow `unpkg.com` and `*.peerjs.com` for the script + signaling
+- **Real-time Sync** - Cell edits, formulas, and cursor positions broadcast instantly
+- **Initial State Transfer** - Host sends complete spreadsheet state when joiner connects
+- **Remote Cursor Presence** - See where the other user is editing in real-time
+- **Automatic Fallback** - Falls back to STUN-only if TURN unavailable (~80% success rate)
 - **Formula Commit Sync** - Computed values broadcast when formulas are confirmed
+- **CSP/network requirement** - Allow `unpkg.com`, `*.peerjs.com`, and `*.metered.live`
 
 ### Password Protection
 
@@ -213,6 +218,8 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 | Unlock encrypted link | Open the link, enter password in the modal to decrypt      |
 | Remove password       | Click the lock icon (closed) and confirm removal           |
 | Toggle theme          | Click sun/moon icon                                        |
+| Start P2P hosting     | Tools → Live Collaboration → Start Hosting                 |
+| Join P2P session      | Tools → Live Collaboration → Enter Host ID → Join          |
 
 ## Keyboard Shortcuts
 
@@ -235,6 +242,9 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 - CSS Custom Properties for theming
 - LZ-String (URL state compression via CDN)
 - Web Crypto API (AES-GCM + PBKDF2) for optional password protection
+- PeerJS 1.5.2 (WebRTC abstraction for P2P collaboration)
+- Netlify Functions (serverless TURN credential proxy)
+- Metered.ca (TURN server service for NAT traversal)
 - Font Awesome 6.5.1 (icons via CDN)
 - Google Analytics (gtag.js) for usage tracking
 - No build tools required
@@ -257,19 +267,37 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 - Formulas limited to SUM and AVG range syntax
 - Very large sheets may hit browser performance or URL length limits; encrypted links are longer
 - Losing the password means the encrypted data cannot be recovered
+- P2P collaboration limited to 1 host + 1 joiner (no multi-user rooms)
+- P2P requires WebRTC support (modern browsers only)
+- Without TURN server, P2P may fail on restrictive networks (~20% of cases)
 
 ## File Structure
 
 ```
 spreadsheet/
-|-- index.html      # Single-page app structure
-|-- styles.css      # All styling including dark mode
-|-- script.js       # Application logic (IIFE module)
-|-- modules/dependencyTracer.js # SVG dependency overlay
-|-- logo.png        # App logo
-|-- favicon.png     # Browser favicon
-|-- CLAUDE.md       # Development documentation
-`-- README.md       # This file
+|-- index.html                  # Single-page app structure
+|-- styles.css                  # All styling including dark mode
+|-- script.js                   # Application logic (IIFE module)
+|-- netlify.toml                # Netlify configuration for functions
+|-- modules/
+|   |-- p2pManager.js           # P2P connection & data sync
+|   |-- dependencyTracer.js     # SVG dependency overlay
+|   |-- formulaManager.js       # Formula evaluation & autocomplete
+|   |-- urlManager.js           # URL state compression & validation
+|   |-- encryption.js           # AES-GCM encryption utilities
+|   |-- passwordManager.js      # Password modal UI flows
+|   |-- rowColManager.js        # Grid rendering & selection
+|   |-- security.js             # HTML sanitization & validation
+|   |-- toastManager.js         # Toast notifications
+|   |-- csvManager.js           # CSV import/export
+|   `-- constants.js            # Config constants
+|-- netlify/
+|   `-- functions/
+|       `-- get-turn-credentials.mjs  # TURN credential proxy
+|-- logo.png                    # App logo
+|-- favicon.png                 # Browser favicon
+|-- CLAUDE.md                   # Development documentation
+`-- README.md                   # This file
 ```
 
 ## Architecture
@@ -279,6 +307,62 @@ spreadsheet/
 - **Event Delegation** - All cell events handled on container
 - **CSS Grid** - Dynamic column template and row heights set via JavaScript
 - **Sticky Headers** - Row/column headers with z-index layering
+
+## P2P Architecture
+
+### Connection Flow
+
+```
+┌─────────────────┐                              ┌─────────────────┐
+│      HOST       │                              │     JOINER      │
+├─────────────────┤                              ├─────────────────┤
+│ 1. Click "Start │                              │                 │
+│    Hosting"     │                              │                 │
+│ 2. Fetch ICE    │                              │                 │
+│    servers      │                              │                 │
+│ 3. Get Peer ID  │──── Share ID via chat ──────▶│ 4. Enter Host ID│
+│                 │                              │ 5. Fetch ICE    │
+│                 │                              │    servers      │
+│                 │◀──── WebRTC Connection ─────│ 6. Connect      │
+│ 7. Send         │                              │                 │
+│    INITIAL_SYNC │─────────────────────────────▶│ 8. Load state   │
+│                 │                              │                 │
+│ 9. Edit cell    │──── UPDATE_CELL ───────────▶│ 10. Update cell │
+│                 │◀─── UPDATE_CELL ────────────│ 11. Edit cell   │
+│                 │                              │                 │
+│ 12. Move cursor │──── UPDATE_CURSOR ─────────▶│ 13. Show cursor │
+└─────────────────┘                              └─────────────────┘
+```
+
+### ICE Server Configuration
+
+The app uses a Netlify Function to securely fetch TURN credentials:
+
+1. **Client** calls `/api/turn-credentials`
+2. **Netlify Function** reads `METERED_API_KEY` from environment
+3. **Function** fetches credentials from Metered.ca API
+4. **Client** receives ICE servers with TURN credentials
+5. **Credentials** cached for 1 hour to reduce API calls
+
+**Fallback**: If TURN unavailable, falls back to Google STUN servers (limited NAT traversal)
+
+### Message Types
+
+| Type | Direction | Purpose |
+|------|-----------|---------|
+| `INITIAL_SYNC` | Host → Joiner | Complete spreadsheet state on connection |
+| `FULL_SYNC` | Host → Joiner | Re-sync after structural changes (add row/col) |
+| `UPDATE_CELL` | Bidirectional | Incremental cell update (value + formula) |
+| `UPDATE_CURSOR` | Bidirectional | Remote cursor position for presence |
+| `SYNC_REQUEST` | Joiner → Host | Request full state if out of sync |
+
+### P2P Security
+
+- **API Key Protection** - TURN API key stored server-side in Netlify env var
+- **HTML Sanitization** - All incoming cell values sanitized via DOMParser whitelist
+- **Formula Validation** - Only SUM/AVG formulas allowed (regex validation)
+- **Bounds Checking** - Cell updates validated against grid dimensions
+- **No E2E Encryption** - Data channel uses DTLS (transport encryption only)
 
 ## Development
 
@@ -291,6 +375,50 @@ npx serve .
 # Open in browser
 http://localhost:3000
 ```
+
+## TURN Server Setup (Self-Hosting)
+
+To enable P2P collaboration with full NAT traversal support, you need to configure a TURN server. The app uses Metered.ca (free tier: 50GB/month).
+
+### 1. Create Metered.ca Account
+
+1. Sign up at [https://www.metered.ca](https://www.metered.ca)
+2. Go to **Dashboard → Developers**
+3. Copy your **API Key**
+
+### 2. Configure Netlify Environment Variable
+
+In your Netlify dashboard:
+
+1. Go to **Site settings → Environment variables**
+2. Add a new variable:
+   - **Key**: `METERED_API_KEY`
+   - **Value**: Your Metered.ca API key
+   - **Scope**: Functions
+
+### 3. Deploy
+
+Push your code to trigger a Netlify deploy. The function at `netlify/functions/get-turn-credentials.mjs` will automatically use the API key.
+
+### 4. Local Testing with Netlify Dev
+
+```bash
+# Install Netlify CLI
+npm install -g netlify-cli
+
+# Create .env file for local testing
+echo "METERED_API_KEY=your_api_key_here" > .env
+
+# Run with functions support
+netlify dev
+```
+
+### Without TURN Server
+
+If `METERED_API_KEY` is not configured:
+- P2P will use **STUN-only** mode (Google STUN servers)
+- Works in ~80% of network configurations
+- May fail behind symmetric NATs or strict firewalls
 
 ## Recent Updates
 
