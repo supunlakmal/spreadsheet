@@ -2244,6 +2244,39 @@ import {
     updateScrollButtons();
   }
 
+  // Tools Modal Logic
+  const toolsMenuBtn = document.getElementById("tools-menu-btn");
+  const toolsModal = document.getElementById("tools-modal");
+  const toolsCloseBtn = document.getElementById("tools-close-btn");
+
+  if (toolsMenuBtn && toolsModal && toolsCloseBtn) {
+    toolsMenuBtn.addEventListener("click", () => {
+      toolsModal.classList.remove("hidden");
+    });
+
+    toolsCloseBtn.addEventListener("click", () => {
+      toolsModal.classList.add("hidden");
+    });
+
+    toolsModal.addEventListener("click", (e) => {
+      if (e.target === toolsModal || e.target.classList.contains("modal-backdrop")) {
+        toolsModal.classList.add("hidden");
+      }
+    });
+    
+    // Close modal when a tool button is clicked (improved UX)
+    toolsModal.querySelectorAll('.tool-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Optional: Don't close for toggles if we want to toggle multiple times
+            // But for now, let's close it to emulate a menu
+            // Exception: maybe theme toggle?
+            if (!btn.id.includes('toggle')) {
+                 toolsModal.classList.add("hidden");
+            }
+        });
+    });
+  }
+
   // Initialize all modules
   initToolbarScroll();
 })();
