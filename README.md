@@ -85,6 +85,12 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 - **QR Handoff** - Show a QR code to continue editing on mobile; warns if the URL is too long
 - **URL Length Indicator** - Live character count with warning/caution/critical thresholds
 
+### Live Collaboration (Beta)
+
+- **Peer-to-peer via PeerJS** - Browser-to-browser sync; no backend server required
+- **1-to-1 only** - One host and one joiner at a time (extra peers are rejected)
+- **CSP/network requirement** - Allow `unpkg.com` and `*.peerjs.com` for the script + signaling
+
 ### Password Protection
 
 - **One-click lock** - Set a password from the toolbar lock button; password never leaves the browser
