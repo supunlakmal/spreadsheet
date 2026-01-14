@@ -1,5 +1,27 @@
 import { showToast } from "./toastManager.js";
 
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    }
+  ]
+};
+
 const defaultCallbacks = {
   onHostReady: () => {},
   onConnectionOpened: () => {},
@@ -40,7 +62,7 @@ export const P2PManager = {
 
     this.disconnect({ silent: true });
     this.isHost = true;
-    this.peer = new PeerCtor();
+    this.peer = new PeerCtor({ config: ICE_SERVERS });
 
     this.peer.on("open", (id) => {
       this.myPeerId = id;
@@ -83,7 +105,7 @@ export const P2PManager = {
 
     this.disconnect({ silent: true });
     this.isHost = false;
-    this.peer = new PeerCtor();
+    this.peer = new PeerCtor({ config: ICE_SERVERS });
 
     this.peer.on("open", () => {
       const conn = this.peer.connect(hostId);
