@@ -60,6 +60,7 @@ let callbacks = {
   FormulaDropdownManager: null,
   onSelectionChange: null,
   onGridResize: null,
+  onFormulaChange: null,
 };
 
 // ========== State Accessors ==========
@@ -748,6 +749,7 @@ export function handleMouseUp(event) {
       clearSelection();
 
       if (callbacks.debouncedUpdateURL) callbacks.debouncedUpdateURL();
+      if (callbacks.onFormulaChange) callbacks.onFormulaChange();
     }, 0);
 
     return;

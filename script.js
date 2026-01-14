@@ -4,6 +4,7 @@
 // Import constants from ES6 module
 import { DEBOUNCE_DELAY, DEFAULT_COLS, DEFAULT_ROWS, MAX_COLS, MAX_ROWS } from "./modules/constants.js";
 import { buildRangeRef, FormulaDropdownManager, FormulaEvaluator, isValidFormula } from "./modules/formulaManager.js";
+import { DependencyTracer } from "./modules/dependencyTracer.js";
 import { PasswordManager } from "./modules/passwordManager.js";
 import { CSVManager } from "./modules/csvManager.js";
 import { JSONManager } from "./modules/jsonManager.js";
@@ -77,6 +78,7 @@ import {
 
   // Debounce timer
   let debounceTimer = null;
+  let dependencyDrawQueued = false;
 
   // Safe limit before QR codes become unreadable on most phone cameras
   const MAX_QR_URL_LENGTH = 2000;
@@ -167,6 +169,7 @@ import {
 
     FormulaDropdownManager.hide();
     debouncedUpdateURL();
+    scheduleDependencyDraw();
   }
 
   // ========== Formula Evaluation Functions ==========
@@ -426,6 +429,21 @@ import {
     }
     debounceTimer = setTimeout(updateURL, DEBOUNCE_DELAY);
   }
+
+  function scheduleDependencyDraw() {
+    if (!DependencyTracer.isActive) return;
+    if (dependencyDrawQueued) return;
+    dependencyDrawQueued = true;
+    requestAnimationFrame(() => {
+      dependencyDrawQueued = false;
+      DependencyTracer.draw(getFormulasArray());
+    });
+  }
+
+  function refreshDependencyLayer() {
+    DependencyTracer.init();
+    scheduleDependencyDraw();
+  }
   // ========== Read-Only Mode Helper Functions ==========
 
   // Apply read-only mode UI state
@@ -572,6 +590,7 @@ import {
     const { rows, cols } = getState();
     if (!isNaN(row) && !isNaN(col) && row < rows && col < cols) {
       setEditingCell(row, col);
+      const previousFormula = formulas[row] ? formulas[row][col] : "";
       const rawValue = target.innerText.trim();
 
       if (rawValue.startsWith("=")) {
@@ -604,6 +623,9 @@ import {
         P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
       }
       updateSelectionStatusBar();
+      if (previousFormula !== formulas[row][col]) {
+        scheduleDependencyDraw();
+      }
     }
   }
 
@@ -673,6 +695,7 @@ import {
     // Evaluate formula when blurred
     if (!isNaN(row) && !isNaN(col)) {
       const rawValue = target.innerText.trim();
+      const previousFormula = formulas[row] ? formulas[row][col] : "";
 
       if (rawValue.startsWith("=")) {
         // NOW evaluate the formula
@@ -687,6 +710,9 @@ import {
         updateSelectionStatusBar();
         if (canBroadcastP2P()) {
           P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
+        }
+        if (previousFormula !== formulas[row][col]) {
+          scheduleDependencyDraw();
         }
       }
     }
@@ -759,6 +785,11 @@ import {
     }, FULL_SYNC_DELAY);
   }
 
+  function handleGridResize() {
+    scheduleFullSync();
+    scheduleDependencyDraw();
+  }
+
   function clearRemoteCursor() {
     document.querySelectorAll(`.${REMOTE_CURSOR_CLASS}`).forEach((el) => el.classList.remove(REMOTE_CURSOR_CLASS));
   }
@@ -784,9 +815,11 @@ import {
     isRemoteUpdate = true;
     applyLoadedState(remoteState);
     renderGrid();
+    DependencyTracer.init();
     recalculateFormulas();
     debouncedUpdateURL();
     updateSelectionStatusBar();
+    scheduleDependencyDraw();
     clearRemoteCursor();
     isRemoteUpdate = false;
     hasInitialSync = true;
@@ -810,6 +843,7 @@ import {
 
     const rawValue = value === undefined || value === null ? "" : String(value);
     const rawFormula = formula === undefined || formula === null ? "" : String(formula);
+    const previousFormula = formulas[rowIndex] ? formulas[rowIndex][colIndex] : "";
     const safeValue = sanitizeHTML(rawValue);
     const isFormulaCell = rawFormula.startsWith("=");
     const isFormulaEdit = isFormulaCell && rawValue.trim().startsWith("=");
@@ -832,6 +866,9 @@ import {
     }
 
     debouncedUpdateURL();
+    if (previousFormula !== formulas[rowIndex][colIndex]) {
+      scheduleDependencyDraw();
+    }
     isRemoteUpdate = false;
   }
 
@@ -993,12 +1030,19 @@ import {
       // Check if this is a formula cell - evaluate it
       const rawValue = target.innerText.trim();
       if (rawValue.startsWith("=")) {
+        const previousFormula = formulas[row] ? formulas[row][col] : "";
         formulas[row][col] = rawValue;
         const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
         data[row][col] = String(result);
         target.innerText = String(result);
         recalculateFormulas();
         debouncedUpdateURL();
+        if (canBroadcastP2P()) {
+          P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
+        }
+        if (previousFormula !== formulas[row][col]) {
+          scheduleDependencyDraw();
+        }
 
         // Exit formula edit mode
         formulaEditMode = false;
@@ -1566,7 +1610,8 @@ import {
       insertTextAtCursor,
       FormulaDropdownManager,
       onSelectionChange: updateSelectionStatusBar,
-      onGridResize: scheduleFullSync,
+      onGridResize: handleGridResize,
+      onFormulaChange: scheduleDependencyDraw,
     });
 
     CSVManager.init({
@@ -1581,7 +1626,10 @@ import {
       debouncedUpdateURL,
       showToast,
       extractPlainText,
-      onImport: scheduleFullSync,
+      onImport: () => {
+        scheduleFullSync();
+        refreshDependencyLayer();
+      },
     });
 
     JSONManager.init({
@@ -1621,6 +1669,9 @@ import {
     // Render the grid
     renderGrid();
 
+    // Initialize Dependency Tracer layer
+    DependencyTracer.init();
+
     // Initialize Formula Dropdown
     FormulaDropdownManager.init(applyFormulaSuggestion);
 
@@ -1630,6 +1681,8 @@ import {
       onDecryptSuccess: (state) => {
         applyLoadedState(state);
         renderGrid();
+        DependencyTracer.init();
+        scheduleDependencyDraw();
       },
       updateURL: updateURL,
       showToast: showToast,
@@ -1670,6 +1723,7 @@ import {
         if (FormulaDropdownManager.isOpen() && FormulaDropdownManager.anchor) {
           FormulaDropdownManager.position(FormulaDropdownManager.anchor);
         }
+        scheduleDependencyDraw();
       });
     }
 
@@ -1677,6 +1731,7 @@ import {
       if (FormulaDropdownManager.isOpen() && FormulaDropdownManager.anchor) {
         FormulaDropdownManager.position(FormulaDropdownManager.anchor);
       }
+      scheduleDependencyDraw();
     });
 
     // Global mouseup to catch drag ending outside container
@@ -1764,23 +1819,27 @@ import {
     const qrBtn = document.getElementById("qr-btn");
     const qrCloseBtn = document.getElementById("qr-close-btn");
     const qrBackdrop = document.querySelector("#qr-modal .modal-backdrop");
+    const traceDepsBtn = document.getElementById("trace-deps-btn");
 
     if (addRowBtn) {
       addRowBtn.addEventListener("click", () => {
         addRow();
         scheduleFullSync();
+        refreshDependencyLayer();
       });
     }
     if (addColBtn) {
       addColBtn.addEventListener("click", () => {
         addColumn();
         scheduleFullSync();
+        refreshDependencyLayer();
       });
     }
     if (clearBtn) {
       clearBtn.addEventListener("click", () => {
         clearSpreadsheet();
         scheduleFullSync();
+        refreshDependencyLayer();
       });
     }
     if (themeToggleBtn) {
@@ -1821,6 +1880,19 @@ import {
     }
     if (qrBackdrop) {
       qrBackdrop.addEventListener("click", hideQRModal);
+    }
+    if (traceDepsBtn) {
+      traceDepsBtn.addEventListener("click", () => {
+        DependencyTracer.init();
+        const isActive = DependencyTracer.toggle();
+        traceDepsBtn.classList.toggle("active", isActive);
+        if (isActive) {
+          DependencyTracer.draw(getFormulasArray());
+          showToast("Visualizing formula dependencies", "info");
+        } else {
+          showToast("Logic visualization hidden", "info");
+        }
+      });
     }
 
     // Embed mode event listeners
@@ -2014,6 +2086,8 @@ import {
     window.addEventListener("hashchange", function () {
       loadStateFromURL();
       renderGrid();
+      DependencyTracer.init();
+      scheduleDependencyDraw();
     });
   }
 
