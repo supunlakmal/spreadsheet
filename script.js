@@ -1996,25 +1996,36 @@ import {
     }
 
     if (p2pUI.startHostBtn) {
-      p2pUI.startHostBtn.addEventListener("click", () => {
-        const started = P2PManager.startHosting();
-        if (!started) return;
+      p2pUI.startHostBtn.addEventListener("click", async () => {
         p2pUI.startHostBtn.disabled = true;
+        p2pUI.startHostBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Connecting...';
+
+        const started = await P2PManager.startHosting();
+        if (!started) {
+          p2pUI.startHostBtn.disabled = false;
+          p2pUI.startHostBtn.innerHTML = p2pUI.startHostLabel;
+          return;
+        }
         p2pUI.startHostBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Hosting...';
       });
     }
 
     if (p2pUI.joinBtn) {
-      p2pUI.joinBtn.addEventListener("click", () => {
+      p2pUI.joinBtn.addEventListener("click", async () => {
         const id = p2pUI.remoteIdInput ? p2pUI.remoteIdInput.value.trim() : "";
         if (!id) {
           showToast("Enter host ID to join", "warning");
           return;
         }
-        const started = P2PManager.joinSession(id);
-        if (!started) return;
+
         p2pUI.joinBtn.disabled = true;
         p2pUI.joinBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Connecting...';
+
+        const started = await P2PManager.joinSession(id);
+        if (!started) {
+          p2pUI.joinBtn.disabled = false;
+          p2pUI.joinBtn.innerHTML = p2pUI.joinLabel;
+        }
       });
     }
 

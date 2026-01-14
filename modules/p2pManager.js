@@ -1,26 +1,50 @@
 import { showToast } from "./toastManager.js";
 
-const ICE_SERVERS = {
+// Default fallback ICE servers (STUN only)
+const FALLBACK_ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    {
-      urls: 'turn:openrelay.metered.ca:80',
-      username: 'openrelayproject',
-      credential: 'openrelayproject'
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject'
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelayproject',
-      credential: 'openrelayproject'
-    }
+    { urls: 'stun:stun1.l.google.com:19302' }
   ]
 };
+
+// Cached ICE configuration
+let cachedIceConfig = null;
+let cacheTimestamp = 0;
+const CACHE_DURATION = 3600000; // 1 hour in milliseconds
+
+// Fetch TURN credentials from Netlify Function
+async function fetchIceServers() {
+  const now = Date.now();
+
+  // Return cached config if still valid
+  if (cachedIceConfig && (now - cacheTimestamp) < CACHE_DURATION) {
+    return cachedIceConfig;
+  }
+
+  try {
+    const response = await fetch('/api/turn-credentials');
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.fallback) {
+      console.warn('Using fallback STUN-only configuration');
+    }
+
+    cachedIceConfig = { iceServers: data.iceServers };
+    cacheTimestamp = now;
+
+    return cachedIceConfig;
+  } catch (error) {
+    console.error('Failed to fetch ICE servers:', error);
+    showToast('Using fallback connection (may have limited connectivity)', 'warning');
+    return FALLBACK_ICE_SERVERS;
+  }
+}
 
 const defaultCallbacks = {
   onHostReady: () => {},
@@ -53,7 +77,7 @@ export const P2PManager = {
     return !!(this.conn && this.conn.open);
   },
 
-  startHosting() {
+  async startHosting() {
     const PeerCtor = getPeerConstructor();
     if (!PeerCtor) {
       showToast("PeerJS not available. Check network or CSP.", "error");
@@ -62,7 +86,10 @@ export const P2PManager = {
 
     this.disconnect({ silent: true });
     this.isHost = true;
-    this.peer = new PeerCtor({ config: ICE_SERVERS });
+
+    // Fetch ICE servers dynamically
+    const iceConfig = await fetchIceServers();
+    this.peer = new PeerCtor({ config: iceConfig });
 
     this.peer.on("open", (id) => {
       this.myPeerId = id;
@@ -91,7 +118,7 @@ export const P2PManager = {
     return true;
   },
 
-  joinSession(hostId) {
+  async joinSession(hostId) {
     const PeerCtor = getPeerConstructor();
     if (!PeerCtor) {
       showToast("PeerJS not available. Check network or CSP.", "error");
@@ -105,7 +132,10 @@ export const P2PManager = {
 
     this.disconnect({ silent: true });
     this.isHost = false;
-    this.peer = new PeerCtor({ config: ICE_SERVERS });
+
+    // Fetch ICE servers dynamically
+    const iceConfig = await fetchIceServers();
+    this.peer = new PeerCtor({ config: iceConfig });
 
     this.peer.on("open", () => {
       const conn = this.peer.connect(hostId);
