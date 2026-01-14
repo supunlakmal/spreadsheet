@@ -58,7 +58,13 @@ export const FORMULA_SUGGESTIONS = [
 ];
 
 // Valid formula patterns (security whitelist)
-export const VALID_FORMULA_PATTERNS = [/^=\s*SUM\s*\(\s*[A-Z]+\d+\s*:\s*[A-Z]+\d+\s*\)\s*$/i, /^=\s*AVG\s*\(\s*[A-Z]+\d+\s*:\s*[A-Z]+\d+\s*\)\s*$/i];
+export const VALID_FORMULA_PATTERNS = [
+  /^=\s*SUM\s*\(\s*[A-Z]+\d+\s*:\s*[A-Z]+\d+\s*\)\s*$/i,
+  /^=\s*AVG\s*\(\s*[A-Z]+\d+\s*:\s*[A-Z]+\d+\s*\)\s*$/i,
+  /^=\s*PROGRESS\s*\(\s*[^)]+\s*\)\s*$/i,
+  /^=\s*TAG\s*\(\s*[^)]+\s*\)\s*$/i,
+  /^=\s*RATING\s*\(\s*[^)]+\s*\)\s*$/i,
+];
 
 export const FONT_SIZE_OPTIONS = [10, 12, 14, 16, 18, 24];
 

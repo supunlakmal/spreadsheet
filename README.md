@@ -85,6 +85,13 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 - **QR Handoff** - Show a QR code to continue editing on mobile; warns if the URL is too long
 - **URL Length Indicator** - Live character count with warning/caution/critical thresholds
 
+### Live Collaboration (Beta)
+
+- **Peer-to-peer via PeerJS** - Browser-to-browser sync; no backend server required
+- **1-to-1 only** - One host and one joiner at a time (extra peers are rejected)
+- **CSP/network requirement** - Allow `unpkg.com` and `*.peerjs.com` for the script + signaling
+- **Formula Commit Sync** - Computed values broadcast when formulas are confirmed
+
 ### Password Protection
 
 - **One-click lock** - Set a password from the toolbar lock button; password never leaves the browser
@@ -107,6 +114,12 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 - **Recalculation** - Dependent formulas update when referenced cells change
 - **Error Handling** - Shows `#REF!` for invalid ranges, `#ERROR!` for unknown formulas
 - **Shareable Formulas** - Formulas preserved in URL for sharing
+
+### Visual Formula Dependency Tracer
+
+- **Trace Logic Overlay** - Click the diagram button to draw SVG curves from sources to formulas
+- **Range Awareness** - Ranges render from the center of the referenced block
+- **Auto Redraw** - Updates on edits, scroll, resize, and grid changes
 
 ### Theme Support
 
@@ -194,6 +207,7 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 | Open on mobile (QR)   | Click the QR button to show a scannable code                |
 | Enter formula         | Type `=` followed by function (e.g., `=SUM(A1:B5)`)        |
 | Select formula range  | Click/drag cells while editing a formula                   |
+| Trace dependencies    | Click the diagram/trace button in the toolbar              |
 | Share                 | Click copy button to copy URL                              |
 | Lock with password    | Click the lock icon (open) and set a password in the modal |
 | Unlock encrypted link | Open the link, enter password in the modal to decrypt      |
@@ -251,6 +265,7 @@ spreadsheet/
 |-- index.html      # Single-page app structure
 |-- styles.css      # All styling including dark mode
 |-- script.js       # Application logic (IIFE module)
+|-- modules/dependencyTracer.js # SVG dependency overlay
 |-- logo.png        # App logo
 |-- favicon.png     # Browser favicon
 |-- CLAUDE.md       # Development documentation
@@ -279,7 +294,13 @@ http://localhost:3000
 
 ## Recent Updates
 
-### Latest - AI Bridge, Embed, and Sharing Upgrades
+### Latest - Visual Dependency Tracer + P2P Formula Sync
+
+- Added a Trace Logic overlay that renders formula dependencies with SVG curves
+- Auto redraws on edits, scroll, resize, and grid updates
+- Fixed P2P formula commits to broadcast computed values reliably
+
+### AI Bridge, Embed, and Sharing Upgrades
 
 - Added Raw Data (AI Bridge) modal to view/copy the current JSON state
 - Read-only toggle and dedicated embed mode with iframe snippet generator

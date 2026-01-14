@@ -28,7 +28,7 @@
         - Note: script-src does NOT include 'unsafe-inline' or 'unsafe-eval', blocking inline script injection
     -->
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://www.googletagmanager.com 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com;">
+        content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://www.googletagmanager.com https://unpkg.com 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com https://*.peerjs.com wss://*.peerjs.com;">
     <title>Spreadsheet</title>
     <link rel="icon" href="favicon.png" type="image/png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -93,39 +93,18 @@
                 <button id="clear-spreadsheet" type="button" title="Clear all data and reset spreadsheet">
                     <i class="fa-solid fa-eraser"></i> Clear
                 </button>
-                <span id="grid-size" class="grid-size"><i class="fa-solid fa-grip"></i> 10 × 10</span>
-                <button id="toggle-readonly" type="button" class="format-btn" title="Toggle read-only mode">
-                    <i class="fa-solid fa-pen-to-square"></i>
-                </button>
                 <button id="theme-toggle" type="button" class="theme-toggle" title="Toggle dark/light mode">
                     <i class="fa-solid fa-sun icon-light"></i>
                     <i class="fa-solid fa-moon icon-dark"></i>
                 </button>
-                <button id="qr-btn" type="button" class="copy-btn" title="Open on mobile">
-                    <i class="fa-solid fa-qrcode"></i>
+                <div class="toolbar-divider"></div>
+
+                <!-- Main Tools Button -->
+                <button id="tools-menu-btn" type="button" class="primary-action tools-btn">
+                    <i class="fa-solid fa-layer-group"></i> Tools
                 </button>
-                <button id="copy-url" type="button" class="copy-btn" title="Copy URL to clipboard">
-                    <i class="fa-solid fa-copy"></i>
-                </button>
-                <button id="open-json-btn" type="button" class="copy-btn" title="View/Edit raw JSON (AI bridge)">
-                    <i class="fa-solid fa-file-code"></i>
-                </button>
-                <button id="generate-embed" type="button" class="copy-btn" title="Generate Embed Code">
-                    <i class="fa-solid fa-code"></i>
-                </button>
-                <button id="import-csv" type="button" class="copy-btn" title="Import CSV">
-                    <i class="fa-solid fa-file-import"></i>
-                </button>
-                <input id="import-csv-file" type="file" accept=".csv,text/csv" hidden>
-                <button id="export-csv" type="button" class="copy-btn" title="Download CSV">
-                    <i class="fa-solid fa-file-csv"></i>
-                </button>
-                <a href="gallery.html" class="copy-btn" title="Template Gallery">
-                    <i class="fa-solid fa-shapes"></i>
-                </a>
-                <button id="lock-btn" type="button" class="copy-btn lock-btn" title="Password Protection">
-                    <i class="fa-solid fa-lock-open"></i>
-                </button>
+
+                <span id="grid-size" class="grid-size"><i class="fa-solid fa-grip"></i> 10 × 10</span>
                 <a href="https://github.com/supunlakmal/spreadsheet" target="_blank" rel="noopener noreferrer"
                     class="github-link" title="View on GitHub">
                     <i class="fa-brands fa-github"></i>
@@ -227,6 +206,37 @@
         </div>
     </div>
 
+    <!-- Collaboration Modal -->
+    <div id="p2p-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3>Live Collaboration (Beta)</h3>
+            <p>Share your session live without saving to a server.</p>
+            <div id="p2p-host-view" class="p2p-section">
+                <button id="p2p-start-host" class="modal-btn modal-btn-primary p2p-btn-full" type="button"><i
+                        class="fa-solid fa-wifi"></i> Start Hosting</button>
+                <div id="p2p-id-display" class="p2p-id-display hidden">
+                    <p class="p2p-label">Your Peer ID (share this):</p>
+                    <div class="p2p-id-row">
+                        <input type="text" id="p2p-my-id" class="p2p-input" readonly>
+                        <button id="p2p-copy-id" class="modal-icon-btn" type="button" aria-label="Copy ID"><i
+                                class="fa-solid fa-copy"></i></button>
+                    </div>
+                </div>
+            </div>
+            <div class="p2p-divider">- OR -</div>
+            <div id="p2p-join-view" class="p2p-section">
+                <input type="text" id="p2p-remote-id" class="p2p-input" placeholder="Enter Host Peer ID">
+                <button id="p2p-join-btn" class="modal-btn modal-btn-secondary p2p-btn-full" type="button"><i
+                        class="fa-solid fa-plug"></i> Join Session</button>
+            </div>
+            <p class="p2p-status" id="p2p-status">Waiting for connection...</p>
+            <div class="modal-buttons">
+                <button id="p2p-close-btn" type="button" class="modal-btn modal-btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- QR Code Modal -->
     <div id="qr-modal" class="modal hidden">
         <div class="modal-backdrop"></div>
@@ -243,11 +253,79 @@
         </div>
     </div>
 
+    <!-- Tools Modal -->
+    <div id="tools-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content tools-modal-content">
+            <div class="tools-modal-header">
+                <h3><i class="fa-solid fa-layer-group"></i> All Tools</h3>
+                <button id="tools-close-btn" type="button" class="modal-icon-btn"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="tools-grid">
+                <!-- Section: View -->
+                <div class="tools-section">
+                    <h4>View</h4>
+                    <div class="tools-list">
+                        <button id="toggle-readonly" type="button" class="tool-item"><i
+                                class="fa-solid fa-pen-to-square"></i> Toggle Read-only</button>
+                    </div>
+                </div>
+
+                <!-- Section: Data & File -->
+                <div class="tools-section">
+                    <h4>Data & File</h4>
+                    <div class="tools-list">
+                        <button id="import-csv" type="button" class="tool-item"><i class="fa-solid fa-file-import"></i>
+                            Import CSV</button>
+                        <button id="export-csv" type="button" class="tool-item"><i class="fa-solid fa-file-csv"></i>
+                            Export CSV</button>
+                        <button id="open-json-btn" type="button" class="tool-item"><i class="fa-solid fa-file-code"></i>
+                            Edit JSON</button>
+                    </div>
+                </div>
+
+                <!-- Section: Share & Embed -->
+                <div class="tools-section">
+                    <h4>Share & Embed</h4>
+                    <div class="tools-list">
+                        <button id="copy-url" type="button" class="tool-item"><i class="fa-solid fa-copy"></i> Copy
+                            Link</button>
+                        <button id="qr-btn" type="button" class="tool-item"><i class="fa-solid fa-qrcode"></i> QR
+                            Code</button>
+                        <button id="generate-embed" type="button" class="tool-item"><i class="fa-solid fa-code"></i>
+                            Embed Code</button>
+                        <button id="present-btn" type="button" class="tool-item"><i class="fa-solid fa-tv"></i>
+                            Presentation Mode</button>
+                    </div>
+                </div>
+
+                <!-- Section: Advanced -->
+                <div class="tools-section">
+                    <h4>Advanced</h4>
+                    <div class="tools-list">
+                        <button id="p2p-btn" type="button" class="tool-item"><i class="fa-solid fa-users"></i> Live
+                            Collaboration</button>
+                        <button id="trace-deps-btn" type="button" class="tool-item"><i
+                                class="fa-solid fa-diagram-project"></i> Trace Dependencies</button>
+                        <button id="lock-btn" type="button" class="tool-item"><i class="fa-solid fa-lock-open"></i>
+                            Password Protect</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Hidden file input moved here -->
+            <input id="import-csv-file" type="file" accept=".csv,text/csv" hidden>
+        </div>
+    </div>
+
     <!-- Toast Notifications Container -->
     <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
-        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js" crossorigin="anonymous"
+        referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous"
+        referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"
         integrity="sha512-qtX0GLM3qX8rxJN1gyDfcnMFFrKvixfoEOwbBib9VafR5vbChV5LeE5wSI/x+IlCkTY5ZFddFDCCfaVJJNnuKQ=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>

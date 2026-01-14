@@ -88,6 +88,7 @@ export const CSVManager = {
     debouncedUpdateURL: () => {},
     showToast: () => {},
     extractPlainText: (value) => (value === null || value === undefined ? "" : String(value)),
+    onImport: null,
   },
 
   init(callbacks = {}) {
@@ -191,6 +192,13 @@ export const CSVManager = {
     }
     if (CSVManager.callbacks.debouncedUpdateURL) {
       CSVManager.callbacks.debouncedUpdateURL();
+    }
+    if (CSVManager.callbacks.onImport) {
+      CSVManager.callbacks.onImport({
+        truncated,
+        rows: nextRows,
+        cols: nextCols,
+      });
     }
 
     if (CSVManager.callbacks.showToast) {

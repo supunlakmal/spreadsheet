@@ -4,9 +4,12 @@
 // Import constants from ES6 module
 import { DEBOUNCE_DELAY, DEFAULT_COLS, DEFAULT_ROWS, MAX_COLS, MAX_ROWS } from "./modules/constants.js";
 import { buildRangeRef, FormulaDropdownManager, FormulaEvaluator, isValidFormula } from "./modules/formulaManager.js";
+import { DependencyTracer } from "./modules/dependencyTracer.js";
 import { PasswordManager } from "./modules/passwordManager.js";
 import { CSVManager } from "./modules/csvManager.js";
 import { JSONManager } from "./modules/jsonManager.js";
+import { P2PManager } from "./modules/p2pManager.js";
+import { PresentationManager } from "./modules/presentationManager.js";
 import {
   addColumn,
   addRow,
@@ -76,6 +79,7 @@ import {
 
   // Debounce timer
   let debounceTimer = null;
+  let dependencyDrawQueued = false;
 
   // Safe limit before QR codes become unreadable on most phone cameras
   const MAX_QR_URL_LENGTH = 2000;
@@ -86,6 +90,26 @@ import {
   let formulaRangeStart = null; // Start of range being selected
   let formulaRangeEnd = null; // End of range being selected
   let editingCell = null; // { row, col } when editing a cell's text
+
+  // P2P collaboration state
+  let isRemoteUpdate = false;
+  let hasInitialSync = false;
+  let fullSyncTimer = null;
+  const FULL_SYNC_DELAY = 300;
+  const REMOTE_CURSOR_CLASS = "remote-active";
+
+  const p2pUI = {
+    modal: null,
+    startHostBtn: null,
+    joinBtn: null,
+    copyIdBtn: null,
+    idDisplay: null,
+    statusEl: null,
+    myIdInput: null,
+    remoteIdInput: null,
+    startHostLabel: "",
+    joinLabel: "",
+  };
 
   // Encryption state
   // Encryption state handled by PasswordManager
@@ -146,6 +170,7 @@ import {
 
     FormulaDropdownManager.hide();
     debouncedUpdateURL();
+    scheduleDependencyDraw();
   }
 
   // ========== Formula Evaluation Functions ==========
@@ -405,6 +430,21 @@ import {
     }
     debounceTimer = setTimeout(updateURL, DEBOUNCE_DELAY);
   }
+
+  function scheduleDependencyDraw() {
+    if (!DependencyTracer.isActive) return;
+    if (dependencyDrawQueued) return;
+    dependencyDrawQueued = true;
+    requestAnimationFrame(() => {
+      dependencyDrawQueued = false;
+      DependencyTracer.draw(getFormulasArray());
+    });
+  }
+
+  function refreshDependencyLayer() {
+    DependencyTracer.init();
+    scheduleDependencyDraw();
+  }
   // ========== Read-Only Mode Helper Functions ==========
 
   // Apply read-only mode UI state
@@ -477,6 +517,7 @@ import {
 
     // Update URL immediately (no debounce)
     updateURL();
+    scheduleFullSync();
   }
 
   // Generate embed code
@@ -550,6 +591,7 @@ import {
     const { rows, cols } = getState();
     if (!isNaN(row) && !isNaN(col) && row < rows && col < cols) {
       setEditingCell(row, col);
+      const previousFormula = formulas[row] ? formulas[row][col] : "";
       const rawValue = target.innerText.trim();
 
       if (rawValue.startsWith("=")) {
@@ -578,7 +620,13 @@ import {
       }
 
       debouncedUpdateURL();
+      if (canBroadcastP2P()) {
+        P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
+      }
       updateSelectionStatusBar();
+      if (previousFormula !== formulas[row][col]) {
+        scheduleDependencyDraw();
+      }
     }
   }
 
@@ -624,6 +672,10 @@ import {
     if (formulas[row][col] && formulas[row][col].startsWith("=")) {
       target.innerText = formulas[row][col];
     }
+
+    if (canBroadcastP2P()) {
+      P2PManager.broadcastCursor(row, col, "#ff0055");
+    }
   }
 
   function handleFocusOut(event) {
@@ -644,6 +696,7 @@ import {
     // Evaluate formula when blurred
     if (!isNaN(row) && !isNaN(col)) {
       const rawValue = target.innerText.trim();
+      const previousFormula = formulas[row] ? formulas[row][col] : "";
 
       if (rawValue.startsWith("=")) {
         // NOW evaluate the formula
@@ -656,6 +709,12 @@ import {
         recalculateFormulas();
         debouncedUpdateURL();
         updateSelectionStatusBar();
+        if (canBroadcastP2P()) {
+          P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
+        }
+        if (previousFormula !== formulas[row][col]) {
+          scheduleDependencyDraw();
+        }
       }
     }
 
@@ -675,6 +734,172 @@ import {
     }
 
     clearActiveHeaders();
+  }
+
+  // ========== P2P Collaboration ==========
+
+  function setP2PStatus(message) {
+    if (p2pUI.statusEl) {
+      p2pUI.statusEl.textContent = message;
+    }
+  }
+
+  function resetP2PControls() {
+    if (p2pUI.startHostBtn) {
+      p2pUI.startHostBtn.disabled = false;
+      if (p2pUI.startHostLabel) {
+        p2pUI.startHostBtn.innerHTML = p2pUI.startHostLabel;
+      }
+    }
+    if (p2pUI.joinBtn) {
+      p2pUI.joinBtn.disabled = false;
+      if (p2pUI.joinLabel) {
+        p2pUI.joinBtn.innerHTML = p2pUI.joinLabel;
+      }
+    }
+    if (p2pUI.idDisplay) {
+      p2pUI.idDisplay.classList.add("hidden");
+    }
+  }
+
+  function canBroadcastP2P() {
+    if (isRemoteUpdate) return false;
+    if (!P2PManager.canSend()) return false;
+    if (!P2PManager.isHost && !hasInitialSync) return false;
+    return true;
+  }
+
+  function sendFullSyncNow() {
+    if (!canBroadcastP2P()) return;
+    recalculateFormulas();
+    const fullState = buildCurrentState();
+    P2PManager.sendFullSync(fullState);
+  }
+
+  function scheduleFullSync() {
+    if (!canBroadcastP2P()) return;
+    if (fullSyncTimer) {
+      clearTimeout(fullSyncTimer);
+    }
+    fullSyncTimer = setTimeout(() => {
+      sendFullSyncNow();
+    }, FULL_SYNC_DELAY);
+  }
+
+  function handleGridResize() {
+    scheduleFullSync();
+    scheduleDependencyDraw();
+  }
+
+  function clearRemoteCursor() {
+    document.querySelectorAll(`.${REMOTE_CURSOR_CLASS}`).forEach((el) => el.classList.remove(REMOTE_CURSOR_CLASS));
+  }
+
+  function handleP2PConnection(amIHost) {
+    hasInitialSync = amIHost;
+    if (amIHost) {
+      recalculateFormulas();
+      const fullState = buildCurrentState();
+      P2PManager.sendInitialSync(fullState);
+      setP2PStatus("Connected. You can now edit together.");
+      if (p2pUI.modal) {
+        p2pUI.modal.classList.add("hidden");
+      }
+    } else {
+      setP2PStatus("Connected. Waiting for host data...");
+      showToast("Waiting for host data...", "info");
+    }
+  }
+
+  function handleInitialSync(remoteState) {
+    if (!remoteState) return;
+    isRemoteUpdate = true;
+    applyLoadedState(remoteState);
+    renderGrid();
+    DependencyTracer.init();
+    recalculateFormulas();
+    debouncedUpdateURL();
+    updateSelectionStatusBar();
+    scheduleDependencyDraw();
+    clearRemoteCursor();
+    isRemoteUpdate = false;
+    hasInitialSync = true;
+    setP2PStatus("Synced with host.");
+    if (p2pUI.modal) {
+      p2pUI.modal.classList.add("hidden");
+    }
+    showToast("Synced with host!", "success");
+  }
+
+  function handleRemoteCellUpdate({ row, col, value, formula }) {
+    const rowIndex = parseInt(row, 10);
+    const colIndex = parseInt(col, 10);
+    if (isNaN(rowIndex) || isNaN(colIndex)) return;
+
+    const { rows, cols } = getState();
+    if (rowIndex < 0 || colIndex < 0 || rowIndex >= rows || colIndex >= cols) {
+      P2PManager.requestFullSync();
+      return;
+    }
+
+    const rawValue = value === undefined || value === null ? "" : String(value);
+    const rawFormula = formula === undefined || formula === null ? "" : String(formula);
+    const previousFormula = formulas[rowIndex] ? formulas[rowIndex][colIndex] : "";
+    const safeValue = sanitizeHTML(rawValue);
+    const isFormulaCell = rawFormula.startsWith("=");
+    const isFormulaEdit = isFormulaCell && rawValue.trim().startsWith("=");
+
+    isRemoteUpdate = true;
+    data[rowIndex][colIndex] = isFormulaEdit ? rawFormula : safeValue;
+    formulas[rowIndex][colIndex] = rawFormula;
+
+    const cellContent = getCellContentElement(rowIndex, colIndex);
+    if (cellContent && document.activeElement !== cellContent) {
+      if (isFormulaEdit) {
+        cellContent.innerText = rawFormula;
+      } else {
+        cellContent.innerHTML = safeValue;
+      }
+    }
+
+    if (!isFormulaEdit) {
+      recalculateFormulas();
+    }
+
+    debouncedUpdateURL();
+    if (previousFormula !== formulas[rowIndex][colIndex]) {
+      scheduleDependencyDraw();
+    }
+    isRemoteUpdate = false;
+  }
+
+  function handleRemoteCursor({ row, col }) {
+    const rowIndex = parseInt(row, 10);
+    const colIndex = parseInt(col, 10);
+    if (isNaN(rowIndex) || isNaN(colIndex)) return;
+
+    const { rows, cols } = getState();
+    if (rowIndex < 0 || colIndex < 0 || rowIndex >= rows || colIndex >= cols) return;
+
+    clearRemoteCursor();
+    const cell = getCellElement(rowIndex, colIndex);
+    if (cell) {
+      cell.classList.add(REMOTE_CURSOR_CLASS);
+    }
+  }
+
+  function handleSyncRequest() {
+    if (!P2PManager.canSend()) return;
+    if (!hasInitialSync && !P2PManager.isHost) return;
+    sendFullSyncNow();
+  }
+
+  function handleP2PDisconnect() {
+    hasInitialSync = false;
+    clearRemoteCursor();
+    resetP2PControls();
+    setP2PStatus("Disconnected.");
+    showToast("Peer disconnected", "warning");
   }
 
   // ========== Mouse Selection Handlers ==========
@@ -806,12 +1031,19 @@ import {
       // Check if this is a formula cell - evaluate it
       const rawValue = target.innerText.trim();
       if (rawValue.startsWith("=")) {
+        const previousFormula = formulas[row] ? formulas[row][col] : "";
         formulas[row][col] = rawValue;
         const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
         data[row][col] = String(result);
         target.innerText = String(result);
         recalculateFormulas();
         debouncedUpdateURL();
+        if (canBroadcastP2P()) {
+          P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
+        }
+        if (previousFormula !== formulas[row][col]) {
+          scheduleDependencyDraw();
+        }
 
         // Exit formula edit mode
         formulaEditMode = false;
@@ -882,6 +1114,7 @@ import {
 
     if (updated) {
       debouncedUpdateURL();
+      scheduleFullSync();
     }
   }
 
@@ -905,6 +1138,7 @@ import {
 
     if (updated) {
       debouncedUpdateURL();
+      scheduleFullSync();
     }
   }
 
@@ -924,6 +1158,7 @@ import {
 
     if (updated) {
       debouncedUpdateURL();
+      scheduleFullSync();
     }
   }
 
@@ -943,6 +1178,7 @@ import {
 
     if (updated) {
       debouncedUpdateURL();
+      scheduleFullSync();
     }
   }
 
@@ -993,6 +1229,9 @@ import {
     if (!isNaN(row) && !isNaN(col) && row < rows && col < cols) {
       data[row][col] = sanitizeHTML(activeElement.innerHTML);
       debouncedUpdateURL();
+      if (canBroadcastP2P()) {
+        P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
+      }
     }
   }
 
@@ -1097,6 +1336,7 @@ import {
 
     // Update URL with new theme
     debouncedUpdateURL();
+    scheduleFullSync();
   }
 
   // Load saved theme preference
@@ -1371,6 +1611,8 @@ import {
       insertTextAtCursor,
       FormulaDropdownManager,
       onSelectionChange: updateSelectionStatusBar,
+      onGridResize: handleGridResize,
+      onFormulaChange: scheduleDependencyDraw,
     });
 
     CSVManager.init({
@@ -1385,12 +1627,38 @@ import {
       debouncedUpdateURL,
       showToast,
       extractPlainText,
+      onImport: () => {
+        scheduleFullSync();
+        refreshDependencyLayer();
+      },
     });
 
     JSONManager.init({
       buildCurrentState: () => minifyStateForExport(buildCurrentState()),
       recalculateFormulas,
       showToast,
+    });
+
+    P2PManager.init({
+      onHostReady: (id) => {
+        if (p2pUI.myIdInput) {
+          p2pUI.myIdInput.value = id;
+        }
+        if (p2pUI.idDisplay) {
+          p2pUI.idDisplay.classList.remove("hidden");
+        }
+        setP2PStatus("Waiting for connection...");
+      },
+      onConnectionOpened: handleP2PConnection,
+      onInitialSync: handleInitialSync,
+      onRemoteCellUpdate: handleRemoteCellUpdate,
+      onRemoteCursorMove: handleRemoteCursor,
+      onSyncRequest: handleSyncRequest,
+      onConnectionClosed: handleP2PDisconnect,
+      onConnectionError: () => {
+        resetP2PControls();
+        setP2PStatus("Connection error.");
+      },
     });
 
     // Load theme preference first (before any rendering)
@@ -1402,6 +1670,9 @@ import {
     // Render the grid
     renderGrid();
 
+    // Initialize Dependency Tracer layer
+    DependencyTracer.init();
+
     // Initialize Formula Dropdown
     FormulaDropdownManager.init(applyFormulaSuggestion);
 
@@ -1411,11 +1682,15 @@ import {
       onDecryptSuccess: (state) => {
         applyLoadedState(state);
         renderGrid();
+        DependencyTracer.init();
+        scheduleDependencyDraw();
       },
       updateURL: updateURL,
       showToast: showToast,
       validateState: validateAndNormalizeState,
     });
+
+    PresentationManager.init();
 
     // Initialize URL length indicator with current hash length
     const currentHash = window.location.hash.slice(1);
@@ -1451,6 +1726,7 @@ import {
         if (FormulaDropdownManager.isOpen() && FormulaDropdownManager.anchor) {
           FormulaDropdownManager.position(FormulaDropdownManager.anchor);
         }
+        scheduleDependencyDraw();
       });
     }
 
@@ -1458,6 +1734,7 @@ import {
       if (FormulaDropdownManager.isOpen() && FormulaDropdownManager.anchor) {
         FormulaDropdownManager.position(FormulaDropdownManager.anchor);
       }
+      scheduleDependencyDraw();
     });
 
     // Global mouseup to catch drag ending outside container
@@ -1542,18 +1819,32 @@ import {
     const importCsvBtn = document.getElementById("import-csv");
     const importCsvInput = document.getElementById("import-csv-file");
     const exportCsvBtn = document.getElementById("export-csv");
+    const presentBtn = document.getElementById("present-btn");
     const qrBtn = document.getElementById("qr-btn");
     const qrCloseBtn = document.getElementById("qr-close-btn");
     const qrBackdrop = document.querySelector("#qr-modal .modal-backdrop");
+    const traceDepsBtn = document.getElementById("trace-deps-btn");
 
     if (addRowBtn) {
-      addRowBtn.addEventListener("click", addRow);
+      addRowBtn.addEventListener("click", () => {
+        addRow();
+        scheduleFullSync();
+        refreshDependencyLayer();
+      });
     }
     if (addColBtn) {
-      addColBtn.addEventListener("click", addColumn);
+      addColBtn.addEventListener("click", () => {
+        addColumn();
+        scheduleFullSync();
+        refreshDependencyLayer();
+      });
     }
     if (clearBtn) {
-      clearBtn.addEventListener("click", clearSpreadsheet);
+      clearBtn.addEventListener("click", () => {
+        clearSpreadsheet();
+        scheduleFullSync();
+        refreshDependencyLayer();
+      });
     }
     if (themeToggleBtn) {
       themeToggleBtn.addEventListener("click", toggleTheme);
@@ -1585,6 +1876,18 @@ import {
     if (exportCsvBtn) {
       exportCsvBtn.addEventListener("click", () => CSVManager.downloadCSV());
     }
+    if (presentBtn) {
+      presentBtn.addEventListener("click", () => {
+        recalculateFormulas();
+        const { rows, cols } = getState();
+        PresentationManager.start(data, formulas, {
+          getCellValue,
+          data,
+          rows,
+          cols,
+        });
+      });
+    }
     if (qrBtn) {
       qrBtn.addEventListener("click", showQRModalWithCode);
     }
@@ -1593,6 +1896,19 @@ import {
     }
     if (qrBackdrop) {
       qrBackdrop.addEventListener("click", hideQRModal);
+    }
+    if (traceDepsBtn) {
+      traceDepsBtn.addEventListener("click", () => {
+        DependencyTracer.init();
+        const isActive = DependencyTracer.toggle();
+        traceDepsBtn.classList.toggle("active", isActive);
+        if (isActive) {
+          DependencyTracer.draw(getFormulasArray());
+          showToast("Visualizing formula dependencies", "info");
+        } else {
+          showToast("Logic visualization hidden", "info");
+        }
+      });
     }
 
     // Embed mode event listeners
@@ -1647,6 +1963,73 @@ import {
     }
     if (jsonCopyBtn) {
       jsonCopyBtn.addEventListener("click", () => JSONManager.copyJSONToClipboard());
+    }
+
+    // P2P collaboration event listeners
+    const p2pBtn = document.getElementById("p2p-btn");
+    p2pUI.modal = document.getElementById("p2p-modal");
+    p2pUI.startHostBtn = document.getElementById("p2p-start-host");
+    p2pUI.joinBtn = document.getElementById("p2p-join-btn");
+    p2pUI.copyIdBtn = document.getElementById("p2p-copy-id");
+    p2pUI.idDisplay = document.getElementById("p2p-id-display");
+    p2pUI.statusEl = document.getElementById("p2p-status");
+    p2pUI.myIdInput = document.getElementById("p2p-my-id");
+    p2pUI.remoteIdInput = document.getElementById("p2p-remote-id");
+    const p2pCloseBtn = document.getElementById("p2p-close-btn");
+    const p2pBackdrop = document.querySelector("#p2p-modal .modal-backdrop");
+
+    if (p2pUI.startHostBtn) {
+      p2pUI.startHostLabel = p2pUI.startHostBtn.innerHTML;
+    }
+    if (p2pUI.joinBtn) {
+      p2pUI.joinLabel = p2pUI.joinBtn.innerHTML;
+    }
+
+    if (p2pBtn && p2pUI.modal) {
+      p2pBtn.addEventListener("click", () => p2pUI.modal.classList.remove("hidden"));
+    }
+    if (p2pCloseBtn && p2pUI.modal) {
+      p2pCloseBtn.addEventListener("click", () => p2pUI.modal.classList.add("hidden"));
+    }
+    if (p2pBackdrop && p2pUI.modal) {
+      p2pBackdrop.addEventListener("click", () => p2pUI.modal.classList.add("hidden"));
+    }
+
+    if (p2pUI.startHostBtn) {
+      p2pUI.startHostBtn.addEventListener("click", () => {
+        const started = P2PManager.startHosting();
+        if (!started) return;
+        p2pUI.startHostBtn.disabled = true;
+        p2pUI.startHostBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Hosting...';
+      });
+    }
+
+    if (p2pUI.joinBtn) {
+      p2pUI.joinBtn.addEventListener("click", () => {
+        const id = p2pUI.remoteIdInput ? p2pUI.remoteIdInput.value.trim() : "";
+        if (!id) {
+          showToast("Enter host ID to join", "warning");
+          return;
+        }
+        const started = P2PManager.joinSession(id);
+        if (!started) return;
+        p2pUI.joinBtn.disabled = true;
+        p2pUI.joinBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Connecting...';
+      });
+    }
+
+    if (p2pUI.copyIdBtn) {
+      p2pUI.copyIdBtn.addEventListener("click", async () => {
+        if (!p2pUI.myIdInput) return;
+        try {
+          await navigator.clipboard.writeText(p2pUI.myIdInput.value);
+          showToast("ID copied!", "success");
+        } catch (err) {
+          p2pUI.myIdInput.select();
+          document.execCommand("copy");
+          showToast("ID copied!", "success");
+        }
+      });
     }
 
     // Read-only mode event listeners
@@ -1719,6 +2102,8 @@ import {
     window.addEventListener("hashchange", function () {
       loadStateFromURL();
       renderGrid();
+      DependencyTracer.init();
+      scheduleDependencyDraw();
     });
   }
 
@@ -1857,6 +2242,39 @@ import {
 
     // Initial check
     updateScrollButtons();
+  }
+
+  // Tools Modal Logic
+  const toolsMenuBtn = document.getElementById("tools-menu-btn");
+  const toolsModal = document.getElementById("tools-modal");
+  const toolsCloseBtn = document.getElementById("tools-close-btn");
+
+  if (toolsMenuBtn && toolsModal && toolsCloseBtn) {
+    toolsMenuBtn.addEventListener("click", () => {
+      toolsModal.classList.remove("hidden");
+    });
+
+    toolsCloseBtn.addEventListener("click", () => {
+      toolsModal.classList.add("hidden");
+    });
+
+    toolsModal.addEventListener("click", (e) => {
+      if (e.target === toolsModal || e.target.classList.contains("modal-backdrop")) {
+        toolsModal.classList.add("hidden");
+      }
+    });
+    
+    // Close modal when a tool button is clicked (improved UX)
+    toolsModal.querySelectorAll('.tool-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Optional: Don't close for toggles if we want to toggle multiple times
+            // But for now, let's close it to emulate a menu
+            // Exception: maybe theme toggle?
+            if (!btn.id.includes('toggle')) {
+                 toolsModal.classList.add("hidden");
+            }
+        });
+    });
   }
 
   // Initialize all modules

@@ -588,6 +588,40 @@ body {
     /* grid-template-columns set dynamically via JS */
     gap: 0;
     min-width: fit-content;
+    position: relative;
+}
+
+/* Dependency Tracer Styles */
+.dependency-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* Let clicks pass through to cells */
+    z-index: 1; /* Above cells, below headers/tooltips */
+    overflow: visible;
+}
+
+.dependency-layer.hidden {
+    display: none;
+}
+
+.dependency-line {
+    transition: opacity 0.3s;
+}
+
+@keyframes dash {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+/* Dependency tracer button active state */
+#trace-deps-btn.active {
+    background-color: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
 }
 
 /* Header cells (A-Z and row numbers) */
@@ -711,6 +745,26 @@ body.resizing {
     z-index: 10;
     position: relative;
     border-radius: 2px;
+}
+
+/* Remote user cursor */
+.cell.remote-active {
+    position: relative;
+    border: 2px solid #ff0055 !important;
+    z-index: 20;
+}
+
+.cell.remote-active::after {
+    content: "Peer";
+    position: absolute;
+    top: -18px;
+    right: -2px;
+    background: #ff0055;
+    color: #ffffff;
+    font-size: 10px;
+    padding: 1px 4px;
+    border-radius: 3px 3px 0 0;
+    pointer-events: none;
 }
 
 /* Formula suggestions dropdown */
@@ -1151,6 +1205,69 @@ body.resizing {
     cursor: not-allowed;
 }
 
+/* Collaboration modal */
+.p2p-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.p2p-btn-full {
+    width: 100%;
+}
+
+.p2p-id-display {
+    margin-top: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 10px;
+}
+
+.p2p-id-display.hidden {
+    display: none;
+}
+
+.p2p-id-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.p2p-label {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.p2p-input {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.p2p-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px var(--cell-focus-shadow);
+}
+
+.p2p-status {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 6px 0 0;
+}
+
+.p2p-divider {
+    text-align: center;
+    margin: 14px 0;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
 /* Embed modal specific styles */
 .embed-code-container {
     margin: 16px 0;
@@ -1463,5 +1580,357 @@ body.resizing {
             transform: translateY(120%);
             opacity: 0;
         }
+    }
+}
+
+/* --- Presentation Mode (Auto-Deck) --- */
+body.presentation-mode-active {
+    overflow: hidden;
+}
+
+.presentation-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #111;
+    color: #fff;
+    z-index: 10000;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+    display: flex;
+    flex-direction: column;
+    scrollbar-width: none;
+}
+
+.presentation-overlay:focus {
+    outline: none;
+}
+
+.presentation-overlay::-webkit-scrollbar {
+    display: none;
+}
+
+.slide {
+    height: 100vh;
+    width: 100vw;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    box-sizing: border-box;
+    position: relative;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.slide-content {
+    max-width: 1000px;
+    width: 100%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.slide-title {
+    font-size: 3.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    background: linear-gradient(to right, #4a90d9, #5a9fe9);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 12px;
+}
+
+.slide-text {
+    font-size: 1.6rem;
+    color: #cfcfcf;
+    font-weight: 300;
+    line-height: 1.5;
+}
+
+.slide-visual {
+    font-size: 1.8rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 10px 0;
+}
+
+.slide-visual.slide-title {
+    font-size: inherit;
+    background: none;
+    -webkit-text-fill-color: inherit;
+}
+
+.presentation-controls {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    padding: 8px 16px;
+    border-radius: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.slide-counter {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+#exit-pres-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#exit-pres-btn:hover {
+    color: #ff4d4f;
+}
+
+.presentation-overlay .visual-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(720px, 85vw);
+}
+
+.presentation-overlay .visual-progress-track {
+    height: 40px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.presentation-overlay .visual-progress-fill {
+    height: 100%;
+    line-height: 40px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+    background: linear-gradient(to right, #4a90d9, #5a9fe9);
+    color: #fff;
+    transition: width 0.3s ease;
+}
+
+.presentation-overlay .visual-progress-label {
+    font-size: 0.95rem;
+    color: #d4d4d4;
+}
+
+.presentation-overlay .visual-tag {
+    padding: 8px 24px;
+    font-size: 1.2rem;
+    font-weight: 600;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.presentation-overlay .visual-rating {
+    display: inline-flex;
+    gap: 8px;
+    font-size: 1.8rem;
+    color: #f5c451;
+}
+
+.presentation-overlay .visual-rating .fa-regular {
+    color: rgba(255, 255, 255, 0.35);
+}
+
+@media (max-width: 768px) {
+    .slide {
+        padding: 24px;
+    }
+
+    .slide-title {
+        font-size: 2.4rem;
+    }
+
+    .slide-text {
+        font-size: 1.2rem;
+    }
+
+    .presentation-controls {
+        bottom: 16px;
+        right: 16px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .presentation-overlay {
+        scroll-behavior: auto;
+    }
+
+    .slide-content {
+        animation: none;
+    }
+}
+
+/* ========== Tools Modal Styles ========== */
+.tools-btn {
+    font-weight: 600 !important;
+    background-color: var(--accent-color) !important;
+    color: white !important;
+    border: 1px solid var(--accent-color) !important;
+    padding: 6px 12px !important;
+    border-radius: 6px !important;
+}
+
+.tools-btn:hover {
+    background-color: var(--accent-hover) !important;
+    box-shadow: 0 2px 4px rgba(74, 144, 217, 0.25);
+}
+
+.tools-modal-content {
+    max-width: 600px;
+    width: 90%;
+    padding: 0 !important; /* Reset padding for header/body split */
+    overflow: hidden; 
+    border-radius: 12px;
+}
+
+.tools-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: var(--bg-header);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tools-modal-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tools-modal-header h3 i {
+    color: var(--accent-color);
+}
+
+.tools-grid {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.tools-section h4 {
+    margin: 0 0 10px 0;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.tools-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tool-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+}
+
+.tool-item:hover {
+    background: var(--bg-cell-focus);
+    border-color: var(--accent-color);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.tool-item i {
+    font-size: 1rem;
+    width: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    transition: color 0.2s;
+}
+
+.tool-item:hover i {
+    color: var(--accent-color);
+}
+
+.tool-item.tool-danger:hover {
+    background: #fff5f5;
+    border-color: #fc8181;
+}
+
+.tool-item.tool-danger:hover i {
+    color: #e53e3e;
+}
+
+/* Modal Close Button */
+.modal-icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.modal-icon-btn:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .tools-grid {
+        grid-template-columns: 1fr;
     }
 }

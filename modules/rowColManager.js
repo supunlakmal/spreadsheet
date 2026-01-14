@@ -59,6 +59,8 @@ let callbacks = {
   insertTextAtCursor: null,
   FormulaDropdownManager: null,
   onSelectionChange: null,
+  onGridResize: null,
+  onFormulaChange: null,
 };
 
 // ========== State Accessors ==========
@@ -582,6 +584,7 @@ export function handleResizeEnd() {
   document.body.style.cursor = "";
   state.resizeState = null;
   if (callbacks.debouncedUpdateURL) callbacks.debouncedUpdateURL();
+  if (callbacks.onGridResize) callbacks.onGridResize();
 }
 
 // ========== Mouse Event Handlers ==========
@@ -746,6 +749,7 @@ export function handleMouseUp(event) {
       clearSelection();
 
       if (callbacks.debouncedUpdateURL) callbacks.debouncedUpdateURL();
+      if (callbacks.onFormulaChange) callbacks.onFormulaChange();
     }, 0);
 
     return;
