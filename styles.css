@@ -1582,3 +1582,218 @@ body.resizing {
         }
     }
 }
+
+/* --- Presentation Mode (Auto-Deck) --- */
+body.presentation-mode-active {
+    overflow: hidden;
+}
+
+.presentation-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #111;
+    color: #fff;
+    z-index: 10000;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+    display: flex;
+    flex-direction: column;
+    scrollbar-width: none;
+}
+
+.presentation-overlay:focus {
+    outline: none;
+}
+
+.presentation-overlay::-webkit-scrollbar {
+    display: none;
+}
+
+.slide {
+    height: 100vh;
+    width: 100vw;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    box-sizing: border-box;
+    position: relative;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.slide-content {
+    max-width: 1000px;
+    width: 100%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.slide-title {
+    font-size: 3.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    background: linear-gradient(to right, #4a90d9, #5a9fe9);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 12px;
+}
+
+.slide-text {
+    font-size: 1.6rem;
+    color: #cfcfcf;
+    font-weight: 300;
+    line-height: 1.5;
+}
+
+.slide-visual {
+    font-size: 1.8rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 10px 0;
+}
+
+.slide-visual.slide-title {
+    font-size: inherit;
+    background: none;
+    -webkit-text-fill-color: inherit;
+}
+
+.presentation-controls {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    padding: 8px 16px;
+    border-radius: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.slide-counter {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+#exit-pres-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#exit-pres-btn:hover {
+    color: #ff4d4f;
+}
+
+.presentation-overlay .visual-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(720px, 85vw);
+}
+
+.presentation-overlay .visual-progress-track {
+    height: 40px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.presentation-overlay .visual-progress-fill {
+    height: 100%;
+    line-height: 40px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+    background: linear-gradient(to right, #4a90d9, #5a9fe9);
+    color: #fff;
+    transition: width 0.3s ease;
+}
+
+.presentation-overlay .visual-progress-label {
+    font-size: 0.95rem;
+    color: #d4d4d4;
+}
+
+.presentation-overlay .visual-tag {
+    padding: 8px 24px;
+    font-size: 1.2rem;
+    font-weight: 600;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.presentation-overlay .visual-rating {
+    display: inline-flex;
+    gap: 8px;
+    font-size: 1.8rem;
+    color: #f5c451;
+}
+
+.presentation-overlay .visual-rating .fa-regular {
+    color: rgba(255, 255, 255, 0.35);
+}
+
+@media (max-width: 768px) {
+    .slide {
+        padding: 24px;
+    }
+
+    .slide-title {
+        font-size: 2.4rem;
+    }
+
+    .slide-text {
+        font-size: 1.2rem;
+    }
+
+    .presentation-controls {
+        bottom: 16px;
+        right: 16px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .presentation-overlay {
+        scroll-behavior: auto;
+    }
+
+    .slide-content {
+        animation: none;
+    }
+}

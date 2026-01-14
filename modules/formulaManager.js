@@ -71,9 +71,20 @@ export function buildRangeRef(startRow, startCol, endRow, endCol) {
   return buildCellRef(minRow, minCol) + ":" + buildCellRef(maxRow, maxCol);
 }
 
+const VISUAL_FORMULA_REGEX = /^=\s*(PROGRESS|TAG|RATING)\s*\((.*)\)\s*$/i;
+
+export function isVisualFormula(formula) {
+  if (!formula || typeof formula !== "string") return false;
+  const match = formula.match(VISUAL_FORMULA_REGEX);
+  if (!match) return false;
+  return match[2].trim().length > 0;
+}
+
 // Check if a formula string is valid (arithmetic or supported functions)
 export function isValidFormula(formula) {
   if (!formula || !formula.startsWith("=")) return false;
+
+  if (isVisualFormula(formula)) return true;
 
   // Check supported functions
   if (/^=SUM\([A-Z]+\d+:[A-Z]+\d+\)$/i.test(formula)) return true;
@@ -373,6 +384,7 @@ export const FormulaEvaluator = {
   // Main formula evaluator
   evaluate(formula, context) {
     if (!formula || !formula.startsWith("=")) return formula;
+    if (isVisualFormula(formula)) return formula;
 
     const expr = formula.substring(1).trim();
     const exprUpper = expr.toUpperCase();

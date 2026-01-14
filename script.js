@@ -9,6 +9,7 @@ import { PasswordManager } from "./modules/passwordManager.js";
 import { CSVManager } from "./modules/csvManager.js";
 import { JSONManager } from "./modules/jsonManager.js";
 import { P2PManager } from "./modules/p2pManager.js";
+import { PresentationManager } from "./modules/presentationManager.js";
 import {
   addColumn,
   addRow,
@@ -1689,6 +1690,8 @@ import {
       validateState: validateAndNormalizeState,
     });
 
+    PresentationManager.init();
+
     // Initialize URL length indicator with current hash length
     const currentHash = window.location.hash.slice(1);
     URLManager.updateURLLengthIndicator(currentHash.length);
@@ -1816,6 +1819,7 @@ import {
     const importCsvBtn = document.getElementById("import-csv");
     const importCsvInput = document.getElementById("import-csv-file");
     const exportCsvBtn = document.getElementById("export-csv");
+    const presentBtn = document.getElementById("present-btn");
     const qrBtn = document.getElementById("qr-btn");
     const qrCloseBtn = document.getElementById("qr-close-btn");
     const qrBackdrop = document.querySelector("#qr-modal .modal-backdrop");
@@ -1871,6 +1875,18 @@ import {
     }
     if (exportCsvBtn) {
       exportCsvBtn.addEventListener("click", () => CSVManager.downloadCSV());
+    }
+    if (presentBtn) {
+      presentBtn.addEventListener("click", () => {
+        recalculateFormulas();
+        const { rows, cols } = getState();
+        PresentationManager.start(data, formulas, {
+          getCellValue,
+          data,
+          rows,
+          cols,
+        });
+      });
     }
     if (qrBtn) {
       qrBtn.addEventListener("click", showQRModalWithCode);
