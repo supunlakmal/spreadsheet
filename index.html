@@ -28,7 +28,7 @@
         - Note: script-src does NOT include 'unsafe-inline' or 'unsafe-eval', blocking inline script injection
     -->
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://www.googletagmanager.com 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com;">
+        content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://www.googletagmanager.com https://unpkg.com 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com https://*.peerjs.com wss://*.peerjs.com;">
     <title>Spreadsheet</title>
     <link rel="icon" href="favicon.png" type="image/png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -123,6 +123,9 @@
                 <a href="gallery.html" class="copy-btn" title="Template Gallery">
                     <i class="fa-solid fa-shapes"></i>
                 </a>
+                <button id="p2p-btn" type="button" class="copy-btn" title="Live Collaboration">
+                    <i class="fa-solid fa-users"></i>
+                </button>
                 <button id="lock-btn" type="button" class="copy-btn lock-btn" title="Password Protection">
                     <i class="fa-solid fa-lock-open"></i>
                 </button>
@@ -227,6 +230,37 @@
         </div>
     </div>
 
+    <!-- Collaboration Modal -->
+    <div id="p2p-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3>Live Collaboration (Beta)</h3>
+            <p>Share your session live without saving to a server.</p>
+            <div id="p2p-host-view" class="p2p-section">
+                <button id="p2p-start-host" class="modal-btn modal-btn-primary p2p-btn-full" type="button"><i
+                        class="fa-solid fa-wifi"></i> Start Hosting</button>
+                <div id="p2p-id-display" class="p2p-id-display hidden">
+                    <p class="p2p-label">Your Peer ID (share this):</p>
+                    <div class="p2p-id-row">
+                        <input type="text" id="p2p-my-id" class="p2p-input" readonly>
+                        <button id="p2p-copy-id" class="modal-icon-btn" type="button" aria-label="Copy ID"><i
+                                class="fa-solid fa-copy"></i></button>
+                    </div>
+                </div>
+            </div>
+            <div class="p2p-divider">- OR -</div>
+            <div id="p2p-join-view" class="p2p-section">
+                <input type="text" id="p2p-remote-id" class="p2p-input" placeholder="Enter Host Peer ID">
+                <button id="p2p-join-btn" class="modal-btn modal-btn-secondary p2p-btn-full" type="button"><i
+                        class="fa-solid fa-plug"></i> Join Session</button>
+            </div>
+            <p class="p2p-status" id="p2p-status">Waiting for connection...</p>
+            <div class="modal-buttons">
+                <button id="p2p-close-btn" type="button" class="modal-btn modal-btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- QR Code Modal -->
     <div id="qr-modal" class="modal hidden">
         <div class="modal-backdrop"></div>
@@ -246,6 +280,8 @@
     <!-- Toast Notifications Container -->
     <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js" crossorigin="anonymous"
+        referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"
