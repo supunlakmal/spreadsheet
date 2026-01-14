@@ -13,7 +13,7 @@ let cachedIceConfig = null;
 let cacheTimestamp = 0;
 const CACHE_DURATION = 3600000; // 1 hour in milliseconds
 
-// Fetch TURN credentials from Netlify Function
+// Fetch TURN credentials from Netlify Function (keeps API key secure)
 async function fetchIceServers() {
   const now = Date.now();
 
