@@ -713,6 +713,26 @@ body.resizing {
     border-radius: 2px;
 }
 
+/* Remote user cursor */
+.cell.remote-active {
+    position: relative;
+    border: 2px solid #ff0055 !important;
+    z-index: 20;
+}
+
+.cell.remote-active::after {
+    content: "Peer";
+    position: absolute;
+    top: -18px;
+    right: -2px;
+    background: #ff0055;
+    color: #ffffff;
+    font-size: 10px;
+    padding: 1px 4px;
+    border-radius: 3px 3px 0 0;
+    pointer-events: none;
+}
+
 /* Formula suggestions dropdown */
 .formula-dropdown {
     position: fixed;
@@ -1149,6 +1169,69 @@ body.resizing {
 .modal-btn-primary:disabled {
     background: var(--text-muted);
     cursor: not-allowed;
+}
+
+/* Collaboration modal */
+.p2p-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.p2p-btn-full {
+    width: 100%;
+}
+
+.p2p-id-display {
+    margin-top: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 10px;
+}
+
+.p2p-id-display.hidden {
+    display: none;
+}
+
+.p2p-id-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.p2p-label {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.p2p-input {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.p2p-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px var(--cell-focus-shadow);
+}
+
+.p2p-status {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 6px 0 0;
+}
+
+.p2p-divider {
+    text-align: center;
+    margin: 14px 0;
+    font-weight: 600;
+    color: var(--text-muted);
 }
 
 /* Embed modal specific styles */
