@@ -360,7 +360,8 @@ export const FormulaEvaluator = {
           .replace(/<[^>]*>/g, "")
           .trim();
         if (stripped === "") continue;
-        const num = parseFloat(stripped);
+        const normalized = stripped.replace(/,/g, "");
+        const num = parseFloat(normalized);
         if (isNaN(num)) continue;
         sum += num;
         count++;

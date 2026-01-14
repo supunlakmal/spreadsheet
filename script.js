@@ -160,7 +160,8 @@ import {
     const stripped = String(val)
       .replace(/<[^>]*>/g, "")
       .trim();
-    const num = parseFloat(stripped);
+    const normalized = stripped.replace(/,/g, "");
+    const num = parseFloat(normalized);
     return isNaN(num) ? 0 : num;
   }
 
