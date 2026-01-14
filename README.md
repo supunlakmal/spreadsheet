@@ -36,7 +36,7 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 - **Client-only** - All state saved in URL hash; no backend required
 - **Compressed URL State** - LZ-String compression keeps share links short
 - **Instant Sharing** - Copy URL to share your spreadsheet with anyone
-- **Dynamic Grid** - Expandable up to 30 rows and 15 columns (A-O)
+- **Dynamic Grid** - Expandable grid; add as many rows/columns as you need
 - **Arrow Key Navigation** - Move the active cell with arrow keys; Shift+Arrow expands selection
 - **Persistent History** - Browser back/forward buttons restore previous states
 
@@ -65,8 +65,8 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 
 ### Grid Management
 
-- **Add Row** - Expand grid rows (max 30)
-- **Add Column** - Expand grid columns (max 15)
+- **Add Row** - Expand grid rows as needed
+- **Add Column** - Expand grid columns as needed
 - **Resize Rows/Columns** - Drag header handles to adjust sizes
 - **Clear Spreadsheet** - Reset to empty 10x10 grid with confirmation
 - **Live Grid Size** - Display shows current dimensions
@@ -182,8 +182,8 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 | Select range          | Click and drag across cells                                |
 | Extend selection      | Shift+Click or Shift+Arrow                                 |
 | Clear selection       | Press Escape                                               |
-| Add row               | Click "+ Row" button (max 30)                              |
-| Add column            | Click "+ Column" button (max 15)                           |
+| Add row               | Click "+ Row" button                                       |
+| Add column            | Click "+ Column" button                                    |
 | Clear all             | Click "Clear" button (with confirmation)                   |
 | Import CSV            | Click import button and choose a .csv file                 |
 | Export CSV            | Click download button                                      |
@@ -239,12 +239,9 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 
 ## Limitations
 
-- Maximum 30 rows
-- Maximum 15 columns (A-O)
-- Default grid: 10 rows x 10 columns
+- Default grid: 10 rows x 10 columns (expand as needed)
 - Formulas limited to SUM and AVG range syntax
-- CSV imports larger than 30x15 are truncated
-- URL length limits may apply for very large spreadsheets; encrypted links are longer
+- Very large sheets may hit browser performance or URL length limits; encrypted links are longer
 - Losing the password means the encrypted data cannot be recovered
 
 ## File Structure

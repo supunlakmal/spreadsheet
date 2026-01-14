@@ -4,9 +4,17 @@ import { FORMULA_SUGGESTIONS } from "./constants.js";
 // Formula Helper Functions
 // ==========================================
 
-// Convert column index to letter (0 = A, 1 = B, ... 25 = Z)
+// Convert column index to letters (0 = A, 25 = Z, 26 = AA)
 export function colToLetter(col) {
-  return String.fromCharCode(65 + col);
+  if (!Number.isInteger(col) || col < 0) return "";
+  let n = col;
+  let letters = "";
+  while (n >= 0) {
+    const remainder = n % 26;
+    letters = String.fromCharCode(65 + remainder) + letters;
+    n = Math.floor(n / 26) - 1;
+  }
+  return letters;
 }
 
 // Convert column letter(s) to index: A=0, B=1, ..., O=14

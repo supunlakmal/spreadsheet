@@ -4,8 +4,8 @@
  */
 
 // ========== Layout & Sizing Limits ==========
-export const MAX_ROWS = 30;
-export const MAX_COLS = 15;
+export const MAX_ROWS = 1000;
+export const MAX_COLS = 1000;
 export const DEBOUNCE_DELAY = 200;
 export const ACTIVE_HEADER_CLASS = "header-active";
 export const ROW_HEADER_WIDTH = 40;
