@@ -7,7 +7,8 @@ import { getState, getCellElement } from "./rowColManager.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const ARROW_ID = "dependency-arrowhead";
-const LINE_COLOR = "#ff0055";
+const DOT_ID = "dependency-dot";
+const LINE_COLOR = "#2196F3"; // Professional Blue
 
 function normalizeRef(ref) {
   return ref.replace(/\$/g, "").toUpperCase();
@@ -71,20 +72,39 @@ export const DependencyTracer = {
     svg.setAttribute("aria-hidden", "true");
 
     const defs = document.createElementNS(SVG_NS, "defs");
-    const marker = document.createElementNS(SVG_NS, "marker");
-    marker.setAttribute("id", ARROW_ID);
-    marker.setAttribute("markerWidth", "10");
-    marker.setAttribute("markerHeight", "7");
-    marker.setAttribute("refX", "9");
-    marker.setAttribute("refY", "3.5");
-    marker.setAttribute("orient", "auto");
 
-    const polygon = document.createElementNS(SVG_NS, "polygon");
-    polygon.setAttribute("points", "0 0, 10 3.5, 0 7");
-    polygon.setAttribute("fill", LINE_COLOR);
+    // Arrow Marker (End) - Smaller Size
+    const arrowMarker = document.createElementNS(SVG_NS, "marker");
+    arrowMarker.setAttribute("id", ARROW_ID);
+    arrowMarker.setAttribute("markerWidth", "6");
+    arrowMarker.setAttribute("markerHeight", "6");
+    arrowMarker.setAttribute("refX", "5"); // Tip
+    arrowMarker.setAttribute("refY", "3");
+    arrowMarker.setAttribute("orient", "auto");
 
-    marker.appendChild(polygon);
-    defs.appendChild(marker);
+    const arrowPath = document.createElementNS(SVG_NS, "path");
+    arrowPath.setAttribute("d", "M0,0 L6,3 L0,6 L1.5,3 z"); // Sharper, smaller arrow
+    arrowPath.setAttribute("fill", LINE_COLOR);
+    arrowMarker.appendChild(arrowPath);
+
+    // Dot Marker (Start)
+    const dotMarker = document.createElementNS(SVG_NS, "marker");
+    dotMarker.setAttribute("id", DOT_ID);
+    dotMarker.setAttribute("markerWidth", "8");
+    dotMarker.setAttribute("markerHeight", "8");
+    dotMarker.setAttribute("refX", "4"); // Center of dot
+    dotMarker.setAttribute("refY", "4");
+    dotMarker.setAttribute("orient", "auto");
+
+    const dotCircle = document.createElementNS(SVG_NS, "circle");
+    dotCircle.setAttribute("cx", "4");
+    dotCircle.setAttribute("cy", "4");
+    dotCircle.setAttribute("r", "3");
+    dotCircle.setAttribute("fill", LINE_COLOR);
+    dotMarker.appendChild(dotCircle);
+
+    defs.appendChild(arrowMarker);
+    defs.appendChild(dotMarker);
     svg.appendChild(defs);
 
     return svg;
@@ -139,15 +159,45 @@ export const DependencyTracer = {
   clear() {
     if (!this.svg) return;
     this.svg.querySelectorAll("path").forEach((path) => path.remove());
+    this.clearHighlights();
+  },
+
+  clearHighlights() {
+    if (!this.container) return;
+    const sources = this.container.querySelectorAll(".dependency-source");
+    const targets = this.container.querySelectorAll(".dependency-target");
+    sources.forEach((el) => el.classList.remove("dependency-source"));
+    targets.forEach((el) => el.classList.remove("dependency-target"));
   },
 
   getCellCenter(row, col) {
+    return this.getCellAnchor(row, col, 'center');
+  },
+  
+  getCellAnchor(row, col, side = 'center') {
     const cell = getCellElement(row, col);
     if (!cell || !this.container) return null;
 
     const rect = cell.getBoundingClientRect();
     const containerRect = this.container.getBoundingClientRect();
 
+    const topOffset = rect.top - containerRect.top + 8; // Near top (corner-like)
+    
+    if (side === 'left') {
+        return {
+            x: rect.left - containerRect.left + 2, // Left edge
+            y: topOffset,
+        };
+    }
+    
+    if (side === 'right') {
+        return {
+            x: rect.right - containerRect.left - 2, // Right edge
+            y: topOffset,
+        };
+    }
+
+    // Default center
     return {
       x: rect.left - containerRect.left + rect.width / 2,
       y: rect.top - containerRect.top + rect.height / 2,
@@ -155,6 +205,7 @@ export const DependencyTracer = {
   },
 
   getRangeCenter(startRow, startCol, endRow, endCol) {
+     // For ranges, we'll just use the visual center for now to avoid complexity
     const topLeft = this.getCellCenter(startRow, startCol);
     const bottomRight = this.getCellCenter(endRow, endCol);
     if (!topLeft || !bottomRight) return null;
@@ -165,6 +216,13 @@ export const DependencyTracer = {
     };
   },
 
+  highlightCell(row, col, type) {
+    const cell = getCellElement(row, col);
+    if (cell) {
+        cell.classList.add(type === "source" ? "dependency-source" : "dependency-target");
+    }
+  },
+
   draw(formulas) {
     if (!this.isActive) return;
     if (!this.ensureLayer()) return;
@@ -173,38 +231,55 @@ export const DependencyTracer = {
     if (Array.isArray(formulas)) {
       this.lastFormulas = formulas;
     }
-    this.clear();
+    this.clear(); // This now calls clearHighlights too
 
     const { rows, cols } = getState();
     if (!Array.isArray(formulaData) || rows <= 0 || cols <= 0) return;
 
-    const drawPath = (source, target) => {
+    const drawPath = (source, target, direction) => {
       if (!this.svg) return;
       if (!source || !target) return;
       if (source.x === target.x && source.y === target.y) return;
 
       const path = document.createElementNS(SVG_NS, "path");
+      
       const deltaX = target.x - source.x;
-      const c1x = source.x + deltaX * 0.5;
-      const c1y = source.y;
-      const c2x = target.x - deltaX * 0.5;
-      const c2y = target.y;
+      const deltaY = target.y - source.y;
+      
+      let c1x, c1y, c2x, c2y;
+
+      if (direction === 'right-to-left') {
+          // R -> L: Curve out to left from source, enter from right to target
+          c1x = source.x - 30;
+          c1y = source.y;
+          c2x = target.x + 30;
+          c2y = target.y;
+      } else if (direction === 'vertical') {
+           // Same column: Curve out to right and back in
+          c1x = source.x + 40;
+          c1y = source.y + deltaY * 0.2;
+          c2x = target.x + 40;
+          c2y = target.y - deltaY * 0.2;
+      } else {
+          // L -> R (Standard): Curve right from source, enter left to target
+          c1x = source.x + 30;
+          c1y = source.y;
+          c2x = target.x - 30;
+          c2y = target.y;
+      }
+
       const d = `M ${source.x} ${source.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${target.x} ${target.y}`;
 
       path.setAttribute("d", d);
       path.setAttribute("stroke", LINE_COLOR);
       path.setAttribute("stroke-width", "2");
       path.setAttribute("fill", "none");
-      path.setAttribute("opacity", "0.6");
-      path.setAttribute("marker-end", `url(#${ARROW_ID})`);
+      path.setAttribute("opacity", "0.8");
+      path.setAttribute("marker-start", `url(#${DOT_ID})`);
+      path.setAttribute("marker-end", `url(#${ARROW_ID})`); 
       path.classList.add("dependency-line");
 
       this.svg.appendChild(path);
-
-      const length = path.getTotalLength();
-      path.style.strokeDasharray = `${length}`;
-      path.style.strokeDashoffset = `${length}`;
-      path.style.animation = "dash 1.5s ease-out forwards";
     };
 
     for (let r = 0; r < rows; r++) {
@@ -215,30 +290,69 @@ export const DependencyTracer = {
         const formula = rowFormulas[c];
         if (!formula || typeof formula !== "string" || !formula.startsWith("=")) continue;
 
-        const targetCenter = this.getCellCenter(r, c);
-        if (!targetCenter) continue;
-
         const refs = extractRefs(formula);
         if (!refs.length) continue;
+
+        // Highlight target (the cell containing the formula)
+        this.highlightCell(r, c, "target");
 
         refs.forEach((refStr) => {
           const cleaned = normalizeRef(refStr);
 
+          // Handle Range refs (keeping simple center logic or default L->R for now to avoid complexity explosion)
           if (cleaned.includes(":")) {
             const range = parseRange(cleaned);
             if (!range) return;
             if (!isInBounds(range.startRow, range.startCol, rows, cols)) return;
             if (!isInBounds(range.endRow, range.endCol, rows, cols)) return;
+            
+            for (let rr = range.startRow; rr <= range.endRow; rr++) {
+                for (let cc = range.startCol; cc <= range.endCol; cc++) {
+                    this.highlightCell(rr, cc, "source");
+                }
+            }
+
+            // For ranges, we just draw from center of range to target 'left' default
             const sourceCenter = this.getRangeCenter(range.startRow, range.startCol, range.endRow, range.endCol);
-            drawPath(sourceCenter, targetCenter);
+            const targetCenter = this.getCellAnchor(r, c, 'left');
+            drawPath(sourceCenter, targetCenter, 'left-to-right');
             return;
           }
 
           const cellRef = parseCellRef(cleaned);
           if (!cellRef) return;
           if (!isInBounds(cellRef.row, cellRef.col, rows, cols)) return;
-          const sourceCenter = this.getCellCenter(cellRef.row, cellRef.col);
-          drawPath(sourceCenter, targetCenter);
+          
+          // Highlight source cell
+          this.highlightCell(cellRef.row, cellRef.col, "source");
+          
+          // Determine Direction
+          let sourceSide, targetSide, direction;
+          
+          if (c > cellRef.col) {
+              // Target is to the RIGHT of Source (Standard Reading Order)
+              // Source -> [Right Edge] ..... [Left Edge] -> Target
+              sourceSide = 'right';
+              targetSide = 'left';
+              direction = 'left-to-right';
+          } else if (c < cellRef.col) {
+              // Target is to the LEFT of Source (Reverse Flow)
+              // Source -> [Left Edge] ..... [Right Edge] -> Target
+              sourceSide = 'left';
+              targetSide = 'right';
+              direction = 'right-to-left';
+          } else {
+              // Same Column (Vertical)
+              // Use Right-to-Right loop to avoid text
+              sourceSide = 'right';
+              targetSide = 'right';
+              direction = 'vertical';
+          }
+
+          const sourcePoint = this.getCellAnchor(cellRef.row, cellRef.col, sourceSide);
+          const targetPoint = this.getCellAnchor(r, c, targetSide);
+          
+          drawPath(sourcePoint, targetPoint, direction);
         });
       }
     }
