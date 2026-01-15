@@ -28,6 +28,8 @@ A lightweight, client-only spreadsheet web application. All data persists in the
   ![Embed modal with iframe snippet](demo/iframe.png)
 - QR code for mobile handoff:  
   ![QR modal to open the sheet on mobile](demo/qr.png)
+- Live Collaboration:  
+  ![Live Collaboration](demo/host.png)
 
 ## Features
 
@@ -188,38 +190,38 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 
 ## Usage
 
-| Action                | How                                                        |
-| --------------------- | ---------------------------------------------------------- |
-| Edit cell             | Double-click a cell or click and start typing              |
-| Format text           | Select text, click B/I/U buttons or use Ctrl+B/I/U         |
-| Align text            | Click left/center/right alignment buttons                  |
-| Set font size         | Use size buttons (Auto, 10-24)                             |
-| Set cell colors       | Use background/text color pickers                          |
-| Resize column/row     | Drag header resize handles                                 |
-| Navigate cells        | Arrow keys (when not editing)                              |
-| Select range          | Click and drag across cells                                |
-| Extend selection      | Shift+Click or Shift+Arrow                                 |
-| Clear selection       | Press Escape                                               |
-| Add row               | Click "+ Row" button                                       |
-| Add column            | Click "+ Column" button                                    |
-| Clear all             | Click "Clear" button (with confirmation)                   |
-| Import CSV            | Click import button and choose a .csv file                 |
-| Export CSV            | Click download button                                      |
+| Action                | How                                                         |
+| --------------------- | ----------------------------------------------------------- |
+| Edit cell             | Double-click a cell or click and start typing               |
+| Format text           | Select text, click B/I/U buttons or use Ctrl+B/I/U          |
+| Align text            | Click left/center/right alignment buttons                   |
+| Set font size         | Use size buttons (Auto, 10-24)                              |
+| Set cell colors       | Use background/text color pickers                           |
+| Resize column/row     | Drag header resize handles                                  |
+| Navigate cells        | Arrow keys (when not editing)                               |
+| Select range          | Click and drag across cells                                 |
+| Extend selection      | Shift+Click or Shift+Arrow                                  |
+| Clear selection       | Press Escape                                                |
+| Add row               | Click "+ Row" button                                        |
+| Add column            | Click "+ Column" button                                     |
+| Clear all             | Click "Clear" button (with confirmation)                    |
+| Import CSV            | Click import button and choose a .csv file                  |
+| Export CSV            | Click download button                                       |
 | Toggle read-only      | Click the pen/eye icon to switch between edit and view-only |
 | Generate embed code   | Click the `</>` button to copy an iframe snippet            |
 | Open raw JSON (AI)    | Click the file-code button to view/copy JSON                |
 | Copy URL              | Click the copy button in the toolbar                        |
 | Open on mobile (QR)   | Click the QR button to show a scannable code                |
-| Enter formula         | Type `=` followed by function (e.g., `=SUM(A1:B5)`)        |
-| Select formula range  | Click/drag cells while editing a formula                   |
-| Trace dependencies    | Click the diagram/trace button in the toolbar              |
-| Share                 | Click copy button to copy URL                              |
-| Lock with password    | Click the lock icon (open) and set a password in the modal |
-| Unlock encrypted link | Open the link, enter password in the modal to decrypt      |
-| Remove password       | Click the lock icon (closed) and confirm removal           |
-| Toggle theme          | Click sun/moon icon                                        |
-| Start P2P hosting     | Tools → Live Collaboration → Start Hosting                 |
-| Join P2P session      | Tools → Live Collaboration → Enter Host ID → Join          |
+| Enter formula         | Type `=` followed by function (e.g., `=SUM(A1:B5)`)         |
+| Select formula range  | Click/drag cells while editing a formula                    |
+| Trace dependencies    | Click the diagram/trace button in the toolbar               |
+| Share                 | Click copy button to copy URL                               |
+| Lock with password    | Click the lock icon (open) and set a password in the modal  |
+| Unlock encrypted link | Open the link, enter password in the modal to decrypt       |
+| Remove password       | Click the lock icon (closed) and confirm removal            |
+| Toggle theme          | Click sun/moon icon                                         |
+| Start P2P hosting     | Tools → Live Collaboration → Start Hosting                  |
+| Join P2P session      | Tools → Live Collaboration → Enter Host ID → Join           |
 
 ## Keyboard Shortcuts
 
@@ -348,13 +350,13 @@ The app uses a Netlify Function to securely fetch TURN credentials:
 
 ### Message Types
 
-| Type | Direction | Purpose |
-|------|-----------|---------|
-| `INITIAL_SYNC` | Host → Joiner | Complete spreadsheet state on connection |
-| `FULL_SYNC` | Host → Joiner | Re-sync after structural changes (add row/col) |
-| `UPDATE_CELL` | Bidirectional | Incremental cell update (value + formula) |
-| `UPDATE_CURSOR` | Bidirectional | Remote cursor position for presence |
-| `SYNC_REQUEST` | Joiner → Host | Request full state if out of sync |
+| Type            | Direction     | Purpose                                        |
+| --------------- | ------------- | ---------------------------------------------- |
+| `INITIAL_SYNC`  | Host → Joiner | Complete spreadsheet state on connection       |
+| `FULL_SYNC`     | Host → Joiner | Re-sync after structural changes (add row/col) |
+| `UPDATE_CELL`   | Bidirectional | Incremental cell update (value + formula)      |
+| `UPDATE_CURSOR` | Bidirectional | Remote cursor position for presence            |
+| `SYNC_REQUEST`  | Joiner → Host | Request full state if out of sync              |
 
 ### P2P Security
 
@@ -416,6 +418,7 @@ netlify dev
 ### Without TURN Server
 
 If `METERED_API_KEY` is not configured:
+
 - P2P will use **STUN-only** mode (Google STUN servers)
 - Works in ~80% of network configurations
 - May fail behind symmetric NATs or strict firewalls
