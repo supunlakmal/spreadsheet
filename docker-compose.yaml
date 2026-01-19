@@ -1,0 +1,28 @@
+services:
+  spreadsheet:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spreadsheet-app
+    ports:
+      - "${HOST_PORT_HTTP:-80}:80"
+      - "${HOST_PORT_HTTPS:-443}:443"
+    environment:
+      # Add any environment variables here if needed
+      TZ: UTC
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    # Optional: Mount local directory for development
+    #volumes:
+      # - ./:/srv:ro  # Read-only mount for live development
+    networks:
+      - spreadsheet-network
+
+networks:
+  spreadsheet-network:
+    driver: bridge
