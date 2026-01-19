@@ -7,6 +7,7 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Vanilla JS](https://img.shields.io/badge/vanilla-JavaScript-yellow.svg)
 ![No Build Tools](https://img.shields.io/badge/build-none-brightgreen.svg)
+[![Netlify Status](https://api.netlify.com/api/v1/badges/30346a8c-6d18-44bd-9307-3a6dc7523d66/deploy-status)](https://app.netlify.com/projects/spreadsheetlive/deploys)
 
 ## Demo Links
 
@@ -224,6 +225,7 @@ docker rm spreadsheet-app
 ### Configuration
 
 **Environment Variables:**
+
 - `TZ`: Timezone setting (default: UTC)
 
 **Volume Mounts:**
@@ -262,11 +264,12 @@ Example for Let's Encrypt with Caddy:
 
 ```yaml
 volumes:
-  - ./data:/data           # For certificate storage
-  - ./config:/config       # For Caddy configuration
+  - ./data:/data # For certificate storage
+  - ./config:/config # For Caddy configuration
 ```
 
 Update the Caddyfile:
+
 ```
 yourdomain.com {
     file_server
