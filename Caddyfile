@@ -1,0 +1,30 @@
+:80 {
+    # Serve all files from the current directory
+    file_server {
+        hide .git .gitignore .dockerignore Dockerfile docker-compose.yaml Caddyfile task.md
+    }
+    
+    # Compress responses
+    encode gzip
+    
+    # Set appropriate cache headers
+    @static {
+        path *.css *.js *.json *.png *.jpg *.jpeg *.gif *.svg *.ico *.woff *.woff2 *.ttf *.eot
+    }
+    header @static Cache-Control "public, max-age=31536000, immutable"
+    
+    # Dynamic content (HTML) - don't cache
+    @html {
+        path_regexp ^.*\.html?$
+    }
+    header @html Cache-Control "public, max-age=0, must-revalidate"
+    
+    # SPA support - rewrite all requests to index.html for hash-based routing
+    try_files {path} /index.html
+    
+    # Log requests
+    log {
+        output stdout
+        format console
+    }
+}

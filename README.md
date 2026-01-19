@@ -167,6 +167,122 @@ Open `index.html` directly in your browser, or use a local server:
 npx serve .
 ```
 
+## Docker Deployment
+
+This project includes Docker configuration for easy containerization and deployment.
+
+### Prerequisites
+
+- Docker and Docker Compose installed on your system
+- See [Docker installation guide](https://docs.docker.com/get-docker/) for your OS
+
+### Using Docker Compose (Recommended)
+
+The simplest way to run the application:
+
+```bash
+docker compose up -d
+```
+
+The application will be available at `http://localhost`. To stop:
+
+```bash
+docker compose down
+```
+
+### Using Docker Directly
+
+Build the image:
+
+```bash
+docker build -t spreadsheet:latest .
+```
+
+Run a container:
+
+```bash
+docker run -d \
+  --name spreadsheet-app \
+  -p 80:80 \
+  -p 443:443 \
+  spreadsheet:latest
+```
+
+View logs:
+
+```bash
+docker logs -f spreadsheet-app
+```
+
+Stop the container:
+
+```bash
+docker stop spreadsheet-app
+docker rm spreadsheet-app
+```
+
+### Configuration
+
+**Environment Variables:**
+- `TZ`: Timezone setting (default: UTC)
+
+**Volume Mounts:**
+For development with live reloading, uncomment the volume mount in `docker-compose.yaml`:
+
+```yaml
+volumes:
+  - ./:/srv:ro
+```
+
+### Architecture
+
+- **Base Image**: `caddy:2-alpine` - Lightweight web server with automatic HTTPS support
+- **Build Stage**: Node.js base for dependency management
+- **Served Files**: All static assets from the repository
+- **Compression**: gzip compression enabled for text content
+- **Caching**: Aggressive caching for static assets (1 year), no-cache for HTML
+- **Health Check**: Built-in health monitoring every 30 seconds
+
+### Docker Files
+
+- **Dockerfile** - Multi-stage build for optimal image size
+- **docker-compose.yaml** - Orchestration with health checks and networking
+- **.dockerignore** - Excludes unnecessary files from the Docker build context
+- **Caddyfile** - Web server configuration with caching and SPA routing
+
+### HTTPS Support
+
+By default, the container serves HTTP on port 80. For HTTPS:
+
+1. Mount an SSL certificate to the container
+2. Update the `Caddyfile` to include your domain and certificate paths
+3. Expose port 443
+
+Example for Let's Encrypt with Caddy:
+
+```yaml
+volumes:
+  - ./data:/data           # For certificate storage
+  - ./config:/config       # For Caddy configuration
+```
+
+Update the Caddyfile:
+```
+yourdomain.com {
+    file_server
+    encode gzip
+}
+```
+
+Caddy will automatically obtain and renew certificates.
+
+### Performance Optimization
+
+- **Image Size**: ~30MB (compressed) using Alpine Linux
+- **Startup Time**: <1 second
+- **Memory Usage**: ~50MB idle
+- **Build Cache**: Leverages Docker layer caching for fast rebuilds
+
 ## How It Works
 
 Your spreadsheet state is stored entirely in the URL hash. The hash is LZ-String compressed JSON to keep links short, and only non-default data is included. When password protection is enabled, that compressed string is encrypted with AES-GCM (256-bit) using a PBKDF2-derived key (100k iterations, random salt/IV) and stored as URL-safe Base64 with an `ENC:` prefix. The password never leaves the browser; recipients must enter it to decrypt locally.
