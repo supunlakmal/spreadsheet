@@ -150,29 +150,17 @@ export function renderGrid() {
     colResize.setAttribute("aria-hidden", "true");
     header.appendChild(colResize);
     
-    // Insert trigger (after this column) - hover zone
-    const insertTrigger = document.createElement("div");
-    insertTrigger.className = "insert-trigger insert-trigger-col";
-    insertTrigger.dataset.insertCol = col;
-    insertTrigger.setAttribute("aria-label", `Insert column after ${colToLetter(col)}`);
-    header.appendChild(insertTrigger);
-    
-    // Insert line (visual indicator)
-    const insertLine = document.createElement("div");
-    insertLine.className = "insert-line insert-line-col";
-    header.appendChild(insertLine);
-    
-    // Insert button
-    const insertBtn = document.createElement("button");
-    insertBtn.className = "insert-btn insert-btn-col";
-    insertBtn.dataset.insertCol = col;
-    insertBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
-    insertBtn.setAttribute("aria-label", `Insert column after ${colToLetter(col)}`);
-    insertBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      insertColumnAt(col + 1);
+
+
+    // Menu button (Ellipsis)
+    const menuBtn = document.createElement("button");
+    menuBtn.className = "menu-btn menu-btn-col";
+    menuBtn.innerHTML = '<i class="fa-solid fa-ellipsis-vertical"></i>';
+    menuBtn.setAttribute("aria-label", `Column options for ${colToLetter(col)}`);
+    menuBtn.addEventListener("click", (e) => {
+      showHeaderMenu(e, 'col', col);
     });
-    header.appendChild(insertBtn);
+    header.appendChild(menuBtn);
     
     container.appendChild(header);
   }
@@ -193,29 +181,17 @@ export function renderGrid() {
     rowResize.setAttribute("aria-hidden", "true");
     rowHeader.appendChild(rowResize);
     
-    // Insert trigger (after this row) - hover zone
-    const insertTrigger = document.createElement("div");
-    insertTrigger.className = "insert-trigger insert-trigger-row";
-    insertTrigger.dataset.insertRow = row;
-    insertTrigger.setAttribute("aria-label", `Insert row after ${row + 1}`);
-    rowHeader.appendChild(insertTrigger);
-    
-    // Insert line (visual indicator)
-    const insertLine = document.createElement("div");
-    insertLine.className = "insert-line insert-line-row";
-    rowHeader.appendChild(insertLine);
-    
-    // Insert button
-    const insertBtn = document.createElement("button");
-    insertBtn.className = "insert-btn insert-btn-row";
-    insertBtn.dataset.insertRow = row;
-    insertBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
-    insertBtn.setAttribute("aria-label", `Insert row after ${row + 1}`);
-    insertBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      insertRowAt(row + 1);
+
+
+    // Menu button (Ellipsis)
+    const menuBtn = document.createElement("button");
+    menuBtn.className = "menu-btn menu-btn-row";
+    menuBtn.innerHTML = '<i class="fa-solid fa-ellipsis-vertical"></i>';
+    menuBtn.setAttribute("aria-label", `Row options for ${row + 1}`);
+    menuBtn.addEventListener("click", (e) => {
+      showHeaderMenu(e, 'row', row);
     });
-    rowHeader.appendChild(insertBtn);
+    rowHeader.appendChild(menuBtn);
     
     container.appendChild(rowHeader);
 
@@ -994,6 +970,148 @@ export function insertColumnAt(index) {
   showToast(`Column ${colToLetter(insertIndex)} inserted`, "success");
 }
 
+export function deleteRow(index) {
+  if (state.rows <= 1) {
+    showToast("Cannot delete the last row", "warning");
+    return;
+  }
+
+  const data = callbacks.getDataArray ? callbacks.getDataArray() : [];
+  const formulas = callbacks.getFormulasArray ? callbacks.getFormulasArray() : [];
+  const cellStyles = callbacks.getCellStylesArray ? callbacks.getCellStylesArray() : [];
+
+  const [removedData] = data.splice(index, 1);
+  const [removedFormulas] = formulas.splice(index, 1);
+  const [removedStyles] = cellStyles.splice(index, 1);
+  const [removedHeight] = state.rowHeights.splice(index, 1);
+
+  state.rows--;
+  renderGrid();
+  if (callbacks.recalculateFormulas) callbacks.recalculateFormulas();
+  if (callbacks.debouncedUpdateURL) callbacks.debouncedUpdateURL();
+
+  showToast(`Row ${index + 1} deleted`, "info", 5000, {
+    label: "Undo",
+    onClick: () => {
+      data.splice(index, 0, removedData);
+      formulas.splice(index, 0, removedFormulas);
+      cellStyles.splice(index, 0, removedStyles);
+      state.rowHeights.splice(index, 0, removedHeight);
+      state.rows++;
+      renderGrid();
+      if (callbacks.recalculateFormulas) callbacks.recalculateFormulas();
+      if (callbacks.debouncedUpdateURL) callbacks.debouncedUpdateURL();
+      showToast("Row deletion undone", "success", 2000);
+    }
+  });
+}
+
+export function deleteColumn(index) {
+  if (state.cols <= 1) {
+    showToast("Cannot delete the last column", "warning");
+    return;
+  }
+
+  const data = callbacks.getDataArray ? callbacks.getDataArray() : [];
+  const formulas = callbacks.getFormulasArray ? callbacks.getFormulasArray() : [];
+  const cellStyles = callbacks.getCellStylesArray ? callbacks.getCellStylesArray() : [];
+
+  // Remove column at index for every row
+  const removedData = data.map(row => row.splice(index, 1)[0]);
+  const removedFormulas = formulas.map(row => row.splice(index, 1)[0]);
+  const removedStyles = cellStyles.map(row => row.splice(index, 1)[0]);
+  const [removedWidth] = state.colWidths.splice(index, 1);
+
+  state.cols--;
+  renderGrid();
+  if (callbacks.recalculateFormulas) callbacks.recalculateFormulas();
+  if (callbacks.debouncedUpdateURL) callbacks.debouncedUpdateURL();
+
+  showToast(`Column ${colToLetter(index)} deleted`, "info", 5000, {
+    label: "Undo",
+    onClick: () => {
+      data.forEach((row, i) => row.splice(index, 0, removedData[i]));
+      formulas.forEach((row, i) => row.splice(index, 0, removedFormulas[i]));
+      cellStyles.forEach((row, i) => row.splice(index, 0, removedStyles[i]));
+      state.colWidths.splice(index, 0, removedWidth);
+      state.cols++;
+      renderGrid();
+      if (callbacks.recalculateFormulas) callbacks.recalculateFormulas();
+      if (callbacks.debouncedUpdateURL) callbacks.debouncedUpdateURL();
+      showToast("Column deletion undone", "success", 2000);
+    }
+  });
+}
+
+
+// ========== Context Menu Logic ==========
+function showHeaderMenu(e, type, index) {
+  e.stopPropagation();
+  
+  // Remove existing menu
+  const existing = document.querySelector(".context-menu");
+  if (existing) existing.remove();
+
+  const menu = document.createElement("div");
+  menu.className = "context-menu";
+  
+  const options = [];
+  if (type === 'row') {
+      options.push({ label: 'Insert 1 row above', icon: 'fa-arrow-up', action: () => insertRowAt(index) });
+      options.push({ label: 'Insert 1 row below', icon: 'fa-arrow-down', action: () => insertRowAt(index + 1) });
+      options.push({ separator: true });
+      options.push({ label: 'Delete row', icon: 'fa-trash', danger: true, action: () => deleteRow(index) });
+  } else {
+      options.push({ label: 'Insert 1 column left', icon: 'fa-arrow-left', action: () => insertColumnAt(index) });
+      options.push({ label: 'Insert 1 column right', icon: 'fa-arrow-right', action: () => insertColumnAt(index + 1) });
+      options.push({ separator: true });
+      options.push({ label: 'Delete column', icon: 'fa-trash', danger: true, action: () => deleteColumn(index) });
+  }
+
+  options.forEach(opt => {
+      if (opt.separator) {
+          const sep = document.createElement("div");
+          sep.className = "context-menu-separator";
+          menu.appendChild(sep);
+      } else {
+          const item = document.createElement("div");
+          item.className = `context-menu-item ${opt.danger ? 'danger' : ''}`;
+          item.innerHTML = `<i class="fa-solid ${opt.icon}"></i> <span>${opt.label}</span>`;
+          item.addEventListener("click", (ev) => {
+              ev.stopPropagation(); // Prevent menu close immediately ? No, we want to close.
+              opt.action();
+              menu.remove();
+              document.removeEventListener('click', closeMenu);
+          });
+          menu.appendChild(item);
+      }
+  });
+
+  document.body.appendChild(menu);
+
+  // Positioning
+  const rect = e.target.getBoundingClientRect();
+  let top = rect.bottom + 5;
+  let left = rect.left;
+
+  // Boundary check
+  if (left + 200 > window.innerWidth) {
+      left = window.innerWidth - 210;
+  }
+  
+  menu.style.top = `${top}px`;
+  menu.style.left = `${left}px`;
+
+  // Close on outside click
+  setTimeout(() => {
+      document.addEventListener('click', closeMenu);
+  }, 0);
+
+  function closeMenu() {
+      menu.remove();
+      document.removeEventListener('click', closeMenu);
+  }
+}
 
 // ========== Clear Spreadsheet ==========
 export function clearSpreadsheet() {

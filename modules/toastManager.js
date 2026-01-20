@@ -23,7 +23,7 @@ export function dismissToast(toast) {
  * @param {string} type - Type: 'success', 'error', 'warning', 'info'
  * @param {number} duration - Duration in ms (0 for no auto-dismiss)
  */
-export function showToast(message, type = "info", duration = TOAST_DURATION) {
+export function showToast(message, type = "info", duration = TOAST_DURATION, action = null) {
   const container = document.getElementById("toast-container");
   if (!container) return;
 
@@ -43,6 +43,18 @@ export function showToast(message, type = "info", duration = TOAST_DURATION) {
   msg.className = "toast-message";
   msg.textContent = message;
   toast.appendChild(msg);
+
+  // Action Button (e.g. Undo)
+  if (action && action.label && action.onClick) {
+    const actionBtn = document.createElement("button");
+    actionBtn.className = "toast-action";
+    actionBtn.textContent = action.label;
+    actionBtn.addEventListener("click", () => {
+      action.onClick();
+      dismissToast(toast);
+    });
+    toast.appendChild(actionBtn);
+  }
 
   // Close button
   const closeBtn = document.createElement("button");
