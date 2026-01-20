@@ -5,60 +5,267 @@
     "icon": "fa-list-check",
     "description": "Track tasks with status, priority, and due dates",
     "data": {
-      "rows": 20,
-      "cols": 6,
-      "theme": "dark",
-      "data": [
-        ["Task Name", "Status", "Priority", "Due Date", "Notes", "Done"],
-        ["Buy Groceries", "Pending", "High", "2024-02-01", "Milk, Eggs, Bread", "FALSE"],
-        ["Finish Project", "In Progress", "Critical", "2024-02-05", "Update documentation", "FALSE"],
-        ["Call Mom", "Pending", "Medium", "2024-02-03", "", "FALSE"],
-        ["Schedule Dentist", "Done", "Low", "2024-01-15", "", "TRUE"],
-        ["", "", "", "", "", ""]
+      "r": 20,
+      "c": 6,
+      "t": "dark",
+      "d": [
+        [0, 0, "Task Name"],
+        [0, 1, "Status"],
+        [0, 2, "Priority"],
+        [0, 3, "Due Date"],
+        [0, 4, "Notes"],
+        [0, 5, "Done"],
+        [1, 0, "Buy Groceries"],
+        [1, 1, "Pending"],
+        [1, 2, "High"],
+        [1, 3, "2024-02-01"],
+        [1, 4, "Milk, Eggs, Bread"],
+        [1, 5, "FALSE"],
+        [2, 0, "Finish Project"],
+        [2, 1, "In Progress"],
+        [2, 2, "Critical"],
+        [2, 3, "2024-02-05"],
+        [2, 4, "Update documentation"],
+        [2, 5, "FALSE"],
+        [3, 0, "Call Mom"],
+        [3, 1, "Pending"],
+        [3, 2, "Medium"],
+        [3, 3, "2024-02-03"],
+        [3, 5, "FALSE"],
+        [4, 0, "Schedule Dentist"],
+        [4, 1, "Done"],
+        [4, 2, "Low"],
+        [4, 3, "2024-01-15"],
+        [4, 5, "TRUE"]
       ],
-      "cellStyles": [
+      "s": [
         [
-          { "bg": "#e0e0e0", "align": "center", "color": "#000000", "fontSize": "12" },
-          { "bg": "#e0e0e0", "align": "center", "color": "#000000", "fontSize": "12" },
-          { "bg": "#e0e0e0", "align": "center", "color": "#000000", "fontSize": "12" },
-          { "bg": "#e0e0e0", "align": "center", "color": "#000000", "fontSize": "12" },
-          { "bg": "#e0e0e0", "align": "center", "color": "#000000", "fontSize": "12" },
-          { "bg": "#e0e0e0", "align": "center", "color": "#000000", "fontSize": "12" }
+          0,
+          0,
+          {
+            "a": "center",
+            "b": "#e0e0e0",
+            "c": "#000000",
+            "z": "12"
+          }
         ],
         [
-          { "fontSize": "12" },
-          { "align": "center", "color": "#d97706", "bg": "#fffbeb" },
-          { "align": "center", "color": "#dc2626", "bg": "#fef2f2" },
-          { "align": "center" },
-          {},
-          { "align": "center" }
+          0,
+          1,
+          {
+            "a": "center",
+            "b": "#e0e0e0",
+            "c": "#000000",
+            "z": "12"
+          }
         ],
         [
-          { "fontSize": "12" },
-          { "align": "center", "color": "#2563eb", "bg": "#eff6ff" },
-          { "align": "center", "color": "#7c3aed", "bg": "#f5f3ff" },
-          { "align": "center" },
-          {},
-          { "align": "center" }
+          0,
+          2,
+          {
+            "a": "center",
+            "b": "#e0e0e0",
+            "c": "#000000",
+            "z": "12"
+          }
         ],
         [
-          { "fontSize": "12" },
-          { "align": "center", "color": "#d97706", "bg": "#fffbeb" },
-          { "align": "center", "color": "#059669", "bg": "#ecfdf5" },
-          { "align": "center" },
-          {},
-          { "align": "center" }
+          0,
+          3,
+          {
+            "a": "center",
+            "b": "#e0e0e0",
+            "c": "#000000",
+            "z": "12"
+          }
         ],
         [
-          { "fontSize": "12", "color": "#9ca3af" },
-          { "align": "center", "color": "#059669", "bg": "#ecfdf5" },
-          { "align": "center", "color": "#4b5563", "bg": "#f3f4f6" },
-          { "align": "center", "color": "#9ca3af" },
-          { "color": "#9ca3af" },
-          { "align": "center" }
+          0,
+          4,
+          {
+            "a": "center",
+            "b": "#e0e0e0",
+            "c": "#000000",
+            "z": "12"
+          }
+        ],
+        [
+          0,
+          5,
+          {
+            "a": "center",
+            "b": "#e0e0e0",
+            "c": "#000000",
+            "z": "12"
+          }
+        ],
+        [
+          1,
+          0,
+          {
+            "z": "12"
+          }
+        ],
+        [
+          1,
+          1,
+          {
+            "a": "center",
+            "b": "#fffbeb",
+            "c": "#d97706"
+          }
+        ],
+        [
+          1,
+          2,
+          {
+            "a": "center",
+            "b": "#fef2f2",
+            "c": "#dc2626"
+          }
+        ],
+        [
+          1,
+          3,
+          {
+            "a": "center"
+          }
+        ],
+        [
+          1,
+          5,
+          {
+            "a": "center"
+          }
+        ],
+        [
+          2,
+          0,
+          {
+            "z": "12"
+          }
+        ],
+        [
+          2,
+          1,
+          {
+            "a": "center",
+            "b": "#eff6ff",
+            "c": "#2563eb"
+          }
+        ],
+        [
+          2,
+          2,
+          {
+            "a": "center",
+            "b": "#f5f3ff",
+            "c": "#7c3aed"
+          }
+        ],
+        [
+          2,
+          3,
+          {
+            "a": "center"
+          }
+        ],
+        [
+          2,
+          5,
+          {
+            "a": "center"
+          }
+        ],
+        [
+          3,
+          0,
+          {
+            "z": "12"
+          }
+        ],
+        [
+          3,
+          1,
+          {
+            "a": "center",
+            "b": "#fffbeb",
+            "c": "#d97706"
+          }
+        ],
+        [
+          3,
+          2,
+          {
+            "a": "center",
+            "b": "#ecfdf5",
+            "c": "#059669"
+          }
+        ],
+        [
+          3,
+          3,
+          {
+            "a": "center"
+          }
+        ],
+        [
+          3,
+          5,
+          {
+            "a": "center"
+          }
+        ],
+        [
+          4,
+          0,
+          {
+            "c": "#9ca3af",
+            "z": "12"
+          }
+        ],
+        [
+          4,
+          1,
+          {
+            "a": "center",
+            "b": "#ecfdf5",
+            "c": "#059669"
+          }
+        ],
+        [
+          4,
+          2,
+          {
+            "a": "center",
+            "b": "#f3f4f6",
+            "c": "#4b5563"
+          }
+        ],
+        [
+          4,
+          3,
+          {
+            "a": "center",
+            "c": "#9ca3af"
+          }
+        ],
+        [
+          4,
+          4,
+          {
+            "c": "#9ca3af"
+          }
+        ],
+        [
+          4,
+          5,
+          {
+            "a": "center"
+          }
         ]
       ],
-      "colWidths": ["200", "100", "100", "100", "200", "60"]
+      "w": [200, 100, 100, 100, 200, 80]
     }
   },
   {
@@ -67,51 +274,211 @@
     "icon": "fa-sack-dollar",
     "description": "Monthly income and expense tracker with totals",
     "data": {
-      "rows": 20,
-      "cols": 5,
-      "theme": "dark",
-      "data": [
-        ["MONTHLY BUDGET", "", "", "", ""],
-        ["", "", "", "", ""],
-        ["Income Source", "Amount", "", "Expense Item", "Cost"],
-        ["Salary", "5000", "", "Rent", "1200"],
-        ["Freelance", "1500", "", "Utilities", "150"],
-        ["Investments", "200", "", "Groceries", "400"],
-        ["Other", "0", "", "Transport", "100"],
-        ["", "", "", "Entertainment", "200"],
-        ["TOTAL INCOME", "=SUM(B4:B7)", "", "TOTAL EXPENSES", "=SUM(E4:E8)"],
-        ["", "", "", "", ""],
-        ["NET SAVINGS", "=B9-E9", "", "", ""]
+      "r": 20,
+      "c": 5,
+      "t": "dark",
+      "d": [
+        [0, 0, "MONTHLY BUDGET"],
+        [2, 0, "Income Source"],
+        [2, 1, "Amount"],
+        [2, 3, "Expense Item"],
+        [2, 4, "Cost"],
+        [3, 0, "Salary"],
+        [3, 1, "5000"],
+        [3, 3, "Rent"],
+        [3, 4, "1200"],
+        [4, 0, "Freelance"],
+        [4, 1, "1500"],
+        [4, 3, "Utilities"],
+        [4, 4, "150"],
+        [5, 0, "Investments"],
+        [5, 1, "200"],
+        [5, 3, "Groceries"],
+        [5, 4, "400"],
+        [6, 0, "Other"],
+        [6, 1, "0"],
+        [6, 3, "Transport"],
+        [6, 4, "100"],
+        [7, 3, "Entertainment"],
+        [7, 4, "200"],
+        [8, 0, "TOTAL INCOME"],
+        [8, 1, "6700"],
+        [8, 3, "TOTAL EXPENSES"],
+        [8, 4, "2050"],
+        [10, 0, "NET SAVINGS"],
+        [10, 1, "4650"]
       ],
-      "cellStyles": [
-        [{ "fontSize": "18", "align": "center", "bg": "#4ade80", "color": "#064e3b" }],
-        [],
+      "f": [
+        [8, 1, "=SUM(B4:B7)"],
+        [8, 4, "=SUM(E4:E8)"],
+        [10, 1, "=B9-E9"]
+      ],
+      "s": [
         [
-          { "bg": "#dcfce7", "align": "left", "color": "#166534" },
-          { "bg": "#dcfce7", "align": "right", "color": "#166534" },
-          {},
-          { "bg": "#fee2e2", "align": "left", "color": "#991b1b" },
-          { "bg": "#fee2e2", "align": "right", "color": "#991b1b" }
+          0,
+          0,
+          {
+            "a": "center",
+            "b": "#4ade80",
+            "c": "#064e3b",
+            "z": "18"
+          }
         ],
-        [{}, { "align": "right" }, {}, {}, { "align": "right" }],
-        [{}, { "align": "right" }, {}, {}, { "align": "right" }],
-        [{}, { "align": "right" }, {}, {}, { "align": "right" }],
-        [{}, { "align": "right" }, {}, {}, { "align": "right" }],
-        [{}, { "align": "right" }, {}, {}, { "align": "right" }],
         [
-          { "bg": "#22c55e", "color": "white" },
-          { "bg": "#22c55e", "align": "right", "color": "white" },
-          {},
-          { "bg": "#ef4444", "color": "white" },
-          { "bg": "#ef4444", "align": "right", "color": "white" }
+          2,
+          0,
+          {
+            "a": "left",
+            "b": "#dcfce7",
+            "c": "#166534"
+          }
         ],
-        [],
         [
-          { "bg": "#1e40af", "color": "white" },
-          { "bg": "#1e40af", "align": "right", "color": "white", "fontSize": "14" }
+          2,
+          1,
+          {
+            "a": "right",
+            "b": "#dcfce7",
+            "c": "#166534"
+          }
+        ],
+        [
+          2,
+          3,
+          {
+            "a": "left",
+            "b": "#fee2e2",
+            "c": "#991b1b"
+          }
+        ],
+        [
+          2,
+          4,
+          {
+            "a": "right",
+            "b": "#fee2e2",
+            "c": "#991b1b"
+          }
+        ],
+        [
+          3,
+          1,
+          {
+            "a": "right"
+          }
+        ],
+        [
+          3,
+          4,
+          {
+            "a": "right"
+          }
+        ],
+        [
+          4,
+          1,
+          {
+            "a": "right"
+          }
+        ],
+        [
+          4,
+          4,
+          {
+            "a": "right"
+          }
+        ],
+        [
+          5,
+          1,
+          {
+            "a": "right"
+          }
+        ],
+        [
+          5,
+          4,
+          {
+            "a": "right"
+          }
+        ],
+        [
+          6,
+          1,
+          {
+            "a": "right"
+          }
+        ],
+        [
+          6,
+          4,
+          {
+            "a": "right"
+          }
+        ],
+        [
+          7,
+          1,
+          {
+            "a": "right"
+          }
+        ],
+        [
+          7,
+          4,
+          {
+            "a": "right"
+          }
+        ],
+        [
+          8,
+          0,
+          {
+            "b": "#22c55e"
+          }
+        ],
+        [
+          8,
+          1,
+          {
+            "a": "right",
+            "b": "#22c55e"
+          }
+        ],
+        [
+          8,
+          3,
+          {
+            "b": "#ef4444"
+          }
+        ],
+        [
+          8,
+          4,
+          {
+            "a": "right",
+            "b": "#ef4444"
+          }
+        ],
+        [
+          10,
+          0,
+          {
+            "b": "#1e40af"
+          }
+        ],
+        [
+          10,
+          1,
+          {
+            "a": "right",
+            "b": "#1e40af",
+            "z": "14"
+          }
         ]
       ],
-      "colWidths": ["150", "100", "20", "150", "100"]
+      "w": [221, 100, 80, 150, 100],
+      "h": [51, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32]
     }
   }
 ]
