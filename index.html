@@ -321,6 +321,23 @@
         </div>
     </div>
 
+    <!-- Template Gallery Modal -->
+    <div id="templates-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content templates-modal-content">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-table-cells-large"></i> Template Gallery</h3>
+                <button id="templates-close-btn" type="button" class="modal-icon-btn" aria-label="Close gallery">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <p class="modal-subtitle">Start with a pre-built spreadsheet.</p>
+            <div id="templates-gallery" class="templates-gallery-container">
+                <!-- Templates will be loaded here -->
+            </div>
+        </div>
+    </div>
+
     <!-- Tools Modal -->
     <div id="tools-modal" class="modal hidden">
         <div class="modal-backdrop"></div>
@@ -345,6 +362,8 @@
                 <div class="tools-section">
                     <h4>Data & File</h4>
                     <div class="tools-list">
+                        <button id="open-templates-btn" type="button" class="tool-item"><i
+                                class="fa-solid fa-table-cells-large"></i> Template Gallery</button>
                         <button id="import-csv" type="button" class="tool-item"><i class="fa-solid fa-file-import"></i>
                             Import CSV</button>
                         <button id="export-csv" type="button" class="tool-item"><i class="fa-solid fa-file-csv"></i>

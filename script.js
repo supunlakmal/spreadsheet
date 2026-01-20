@@ -11,6 +11,7 @@ import { JSONManager } from "./modules/jsonManager.js";
 import { HashToolManager } from "./modules/hashToolManager.js";
 import { P2PManager } from "./modules/p2pManager.js";
 import { PresentationManager } from "./modules/presentationManager.js";
+import { TemplateManager } from "./modules/templateManager.js";
 import {
   addColumn,
   addRow,
@@ -2309,4 +2310,5 @@ import {
 
   // Initialize all modules
   initToolbarScroll();
+  TemplateManager.init();
 })();

@@ -4,6 +4,94 @@
     "name": "Todo List",
     "icon": "fa-list-check",
     "description": "Track tasks with status, priority, and due dates",
-    "link": "/#N4IgTiBcCMBMA0IDGUCsiAuUQBsCWA5gBZaIAmUA2pQAzx0gDKGAhlgLry3zSIAqLAM4BrAAQARAKaCkYPAAcMeAPYA7EJ24IQABTnK5GAJ4audAMyJxAV0kS2k09wAsiAKKCMAOlEAJZdZggk68DOIA8gBybiE8iIySGNbyogBKkvLKgngYBiaavNq+hESxliCwNLDmALTQNDU00LGuFU4IDADqAJI67XEg4mAsAGYYogCCOt2ijEhEkgC2LP1FJf3lldV1DTSo-a2oXvualgx84RFOlryD0oSqogAyygR4jzosBI6n8NoAspIKL9NlVavUdtd4K1nE5XOdLuE4QNOoY7ABVVQ5UR8aQYYKaVzaF4Ad2RoO2ELgyNa5ic6ARV006FuuJYi1mRlUKGZf0QpPp8Ap4Ia0BOXHQrWamgA7EL+MpWDhnsoWGRIE4AJwDSKK6Qagp0W56FSGIzPSTfVTqvwlUQACnSZAAlPBRICyA6AJqSHA4ZQk10qkkOgBCOFszo0nBAIyolDlrQAvIx0f97W5YJA3AA2KPsGPBSDUOh0UAAI2wAGJzLW6yBECgNVWRq22w2QCsNUhJKoMJIIABfTRG+AV6t1+uN6tt9vDsx88fNye1jtNkAt2dxxBd5C9-tDkfypcbld06fNrfbzvYHt9gcgecuMcgSvLldrmdbju7uTELBPqEL7rlWNA0CwLBgT+t77g+gFxKAIEABwoahj4FIuyBfmBUE7jB96HlwHTAV+LCoLhN7drBhGUAgCCIdhOHQVRBHoVwZwkc2EHcSseEsQebGUJY9FYc2ZDOJB0Aysxe6sU+8KcRuPEQTJd4CfJmEgThNCtqp1GCQyilVspvGUbJ6m8iJWk4bpfHmXBsrHmZf4kB2b4bpInleYJiYvu5VZed5iAAF7YNAsJPtqvAnpuIwsEgFAXhuqApalgn1AhIChRq9Sfs2OYFYV6ExmSxY5nQsDkfASFGmB1U0Owg5AA"
+    "data": {
+      "rows": 20,
+      "cols": 6,
+      "theme": "light",
+      "data": [
+        ["Task Name", "Status", "Priority", "Due Date", "Notes", "Done"],
+        ["Buy Groceries", "Pending", "High", "2024-02-01", "Milk, Eggs, Bread", "FALSE"],
+        ["Finish Project", "In Progress", "Critical", "2024-02-05", "Update documentation", "FALSE"],
+        ["Call Mom", "Pending", "Medium", "2024-02-03", "", "FALSE"],
+        ["Schedule Dentist", "Done", "Low", "2024-01-15", "", "TRUE"],
+        ["", "", "", "", "", ""]
+      ],
+      "cellStyles": [
+        [
+          {"bg": "#e0e0e0", "align": "center", "color": "#000000", "fontSize": "12"},
+          {"bg": "#e0e0e0", "align": "center", "color": "#000000", "fontSize": "12"},
+          {"bg": "#e0e0e0", "align": "center", "color": "#000000", "fontSize": "12"},
+          {"bg": "#e0e0e0", "align": "center", "color": "#000000", "fontSize": "12"},
+          {"bg": "#e0e0e0", "align": "center", "color": "#000000", "fontSize": "12"},
+          {"bg": "#e0e0e0", "align": "center", "color": "#000000", "fontSize": "12"}
+        ],
+        [
+            {"fontSize": "12"}, {"align": "center", "color": "#d97706", "bg": "#fffbeb"}, {"align": "center", "color": "#dc2626", "bg": "#fef2f2"}, {"align": "center"}, {}, {"align": "center"}
+        ],
+        [
+            {"fontSize": "12"}, {"align": "center", "color": "#2563eb", "bg": "#eff6ff"}, {"align": "center", "color": "#7c3aed", "bg": "#f5f3ff"}, {"align": "center"}, {}, {"align": "center"}
+        ],
+        [
+            {"fontSize": "12"}, {"align": "center", "color": "#d97706", "bg": "#fffbeb"}, {"align": "center", "color": "#059669", "bg": "#ecfdf5"}, {"align": "center"}, {}, {"align": "center"}
+        ],
+        [
+            {"fontSize": "12", "color": "#9ca3af"}, {"align": "center", "color": "#059669", "bg": "#ecfdf5"}, {"align": "center", "color": "#4b5563", "bg": "#f3f4f6"}, {"align": "center", "color": "#9ca3af"}, {"color": "#9ca3af"}, {"align": "center"}
+        ]
+      ],
+      "colWidths": ["200", "100", "100", "100", "200", "60"]
+    }
+  },
+  {
+    "id": "budget",
+    "name": "Simple Budget",
+    "icon": "fa-sack-dollar",
+    "description": "Monthly income and expense tracker with totals",
+    "data": {
+      "rows": 20,
+      "cols": 5,
+      "theme": "light",
+      "data": [
+        ["MONTHLY BUDGET", "", "", "", ""],
+        ["", "", "", "", ""],
+        ["Income Source", "Amount", "", "Expense Item", "Cost"],
+        ["Salary", "5000", "", "Rent", "1200"],
+        ["Freelance", "1500", "", "Utilities", "150"],
+        ["Investments", "200", "", "Groceries", "400"],
+        ["Other", "0", "", "Transport", "100"],
+        ["", "", "", "Entertainment", "200"],
+        ["TOTAL INCOME", "=SUM(B4:B7)", "", "TOTAL EXPENSES", "=SUM(E4:E8)"],
+        ["", "", "", "", ""],
+        ["NET SAVINGS", "=B9-E9", "", "", ""]
+      ],
+      "cellStyles": [
+        [{"fontSize": "18", "align": "center", "bg": "#4ade80", "color": "#064e3b"}],
+        [],
+        [
+            {"bg": "#dcfce7", "align": "left", "color": "#166534"}, 
+            {"bg": "#dcfce7", "align": "right", "color": "#166534"}, 
+            {}, 
+            {"bg": "#fee2e2", "align": "left", "color": "#991b1b"}, 
+            {"bg": "#fee2e2", "align": "right", "color": "#991b1b"}
+        ],
+        [{}, {"align": "right"}, {}, {}, {"align": "right"}],
+        [{}, {"align": "right"}, {}, {}, {"align": "right"}],
+        [{}, {"align": "right"}, {}, {}, {"align": "right"}],
+        [{}, {"align": "right"}, {}, {}, {"align": "right"}],
+        [{}, {"align": "right"}, {}, {}, {"align": "right"}],
+        [
+            {"bg": "#22c55e", "color": "white"}, 
+            {"bg": "#22c55e", "align": "right", "color": "white"}, 
+            {}, 
+            {"bg": "#ef4444", "color": "white"}, 
+            {"bg": "#ef4444", "align": "right", "color": "white"}
+        ],
+        [],
+        [
+            {"bg": "#1e40af", "color": "white"}, 
+            {"bg": "#1e40af", "align": "right", "color": "white", "fontSize": "14"}
+        ]
+      ],
+      "colWidths": ["150", "100", "20", "150", "100"]
+    }
   }
 ]

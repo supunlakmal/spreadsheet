@@ -1793,6 +1793,7 @@ body.presentation-mode-active {
     font-weight: 700;
     line-height: 1.1;
     background: linear-gradient(to right, #4a90d9, #5a9fe9);
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 12px;
@@ -2143,4 +2144,160 @@ body.presentation-mode-active {
 .dark-mode .doc-code {
     background: rgba(90, 159, 233, 0.15);
     border-color: rgba(90, 159, 233, 0.3);
+}
+
+/* ========== Template Gallery Styles ========== */
+.templates-modal-content {
+    max-width: 900px;
+    width: 90%;
+    padding: 0 !important;
+    overflow: hidden;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    max-height: 85vh;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: var(--bg-header);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.modal-subtitle {
+    padding: 12px 20px;
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.templates-gallery-container {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+    background: var(--bg-primary);
+}
+
+.templates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 24px;
+}
+
+.template-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    cursor: default;
+    box-shadow: var(--shadow-sm);
+}
+
+.template-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--accent-color);
+}
+
+.template-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    background: var(--hover-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    font-size: 1.75rem;
+    color: var(--accent-color);
+    transition: all 0.3s ease;
+}
+
+.template-card:hover .template-icon {
+    background: var(--accent-color);
+    color: white;
+    transform: scale(1.1) rotate(-5deg);
+}
+
+.template-info {
+    flex: 1;
+    margin-bottom: 24px;
+    width: 100%;
+}
+
+.template-info h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.template-info p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.template-actions {
+    width: 100%;
+}
+
+.use-template-btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid var(--border-color);
+}
+
+.use-template-btn:hover {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+    box-shadow: 0 4px 12px rgba(74, 144, 217, 0.2);
+}
+
+/* Loading State */
+.loading-spinner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    padding: 40px;
+}
+
+.error-message {
+    text-align: center;
+    color: #ef4444;
+    padding: 20px;
+    background: #fef2f2;
+    border-radius: 8px;
+    border: 1px solid #fee2e2;
+}
+
+@media (max-width: 600px) {
+    .templates-grid {
+        grid-template-columns: 1fr;
+    }
 }
