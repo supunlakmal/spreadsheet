@@ -419,27 +419,39 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 ```
 spreadsheet/
 |-- index.html                  # Single-page app structure
-|-- styles.css                  # All styling including dark mode
-|-- script.js                   # Application logic (IIFE module)
+|-- styles.css                  # Main styling
+|-- script.js                   # Application logic
+|-- templates.json              # Template definitions + minified sheet data
+|-- example.json.md             # Example minified JSON schema doc
 |-- netlify.toml                # Netlify configuration for functions
 |-- modules/
-|   |-- p2pManager.js           # P2P connection & data sync
+|   |-- constants.js            # Config constants + key maps
+|   |-- csvManager.js           # CSV import/export
 |   |-- dependencyTracer.js     # SVG dependency overlay
-|   |-- formulaManager.js       # Formula evaluation & autocomplete
-|   |-- urlManager.js           # URL state compression & validation
 |   |-- encryption.js           # AES-GCM encryption utilities
+|   |-- formulaManager.js       # Formula evaluation & autocomplete
+|   |-- hashToolManager.js      # Hash <-> JSON tool modal
+|   |-- jsonManager.js          # Raw JSON modal (AI bridge)
+|   |-- p2pManager.js           # P2P connection & data sync
 |   |-- passwordManager.js      # Password modal UI flows
+|   |-- presentationManager.js  # Presentation mode
 |   |-- rowColManager.js        # Grid rendering & selection
 |   |-- security.js             # HTML sanitization & validation
+|   |-- templateManager.js      # Templates gallery + loader
 |   |-- toastManager.js         # Toast notifications
-|   |-- csvManager.js           # CSV import/export
-|   `-- constants.js            # Config constants
+|   |-- urlManager.js           # URL state compression & validation
+|   `-- visualFunctions.js      # Visual formula helpers
 |-- netlify/
 |   `-- functions/
 |       `-- get-turn-credentials.mjs  # TURN credential proxy
+|-- demo/
+|   `-- *.png                   # README screenshots
+|-- Caddyfile                   # Caddy reverse proxy config
+|-- Dockerfile                  # Docker image build
+|-- docker-compose.yaml         # Docker compose config
+|-- LICENSE                     # License
 |-- logo.png                    # App logo
 |-- favicon.png                 # Browser favicon
-|-- CLAUDE.md                   # Development documentation
 `-- README.md                   # This file
 ```
 
