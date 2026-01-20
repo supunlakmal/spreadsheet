@@ -9,6 +9,8 @@ const elements = {
   textarea: null,
   errorEl: null,
   copyBtn: null,
+  docs: null,
+  docsToggle: null,
 };
 
 function clearJSONError() {
@@ -27,6 +29,14 @@ export const JSONManager = {
     elements.textarea = document.getElementById("json-editor");
     elements.errorEl = document.getElementById("json-error");
     elements.copyBtn = document.getElementById("json-copy-btn");
+    elements.docs = document.getElementById("json-docs");
+    elements.docsToggle = document.getElementById("json-docs-toggle");
+
+    if (elements.docsToggle) {
+      elements.docsToggle.addEventListener("click", () => {
+        this.toggleDocs();
+      });
+    }
   },
 
   openModal() {
@@ -48,7 +58,25 @@ export const JSONManager = {
     if (elements.modal) {
       elements.modal.classList.add("hidden");
     }
+    if (elements.docs) {
+      elements.docs.classList.remove("visible");
+    }
+    if (elements.docsToggle) {
+      elements.docsToggle.textContent = "Show Schema Reference";
+    }
     clearJSONError();
+  },
+
+  toggleDocs() {
+    if (!elements.docs || !elements.docsToggle) return;
+    const isVisible = elements.docs.classList.contains("visible");
+    if (isVisible) {
+      elements.docs.classList.remove("visible");
+      elements.docsToggle.textContent = "Show Schema Reference";
+    } else {
+      elements.docs.classList.add("visible");
+      elements.docsToggle.textContent = "Hide Schema Reference";
+    }
   },
 
   async copyJSONToClipboard() {

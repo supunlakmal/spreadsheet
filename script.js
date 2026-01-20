@@ -8,6 +8,7 @@ import { DependencyTracer } from "./modules/dependencyTracer.js";
 import { PasswordManager } from "./modules/passwordManager.js";
 import { CSVManager } from "./modules/csvManager.js";
 import { JSONManager } from "./modules/jsonManager.js";
+import { HashToolManager } from "./modules/hashToolManager.js";
 import { P2PManager } from "./modules/p2pManager.js";
 import { PresentationManager } from "./modules/presentationManager.js";
 import {
@@ -1638,6 +1639,9 @@ import {
       recalculateFormulas,
       showToast,
     });
+    HashToolManager.init({
+      showToast,
+    });
 
     P2PManager.init({
       onHostReady: (id) => {
@@ -1963,6 +1967,21 @@ import {
     }
     if (jsonCopyBtn) {
       jsonCopyBtn.addEventListener("click", () => JSONManager.copyJSONToClipboard());
+    }
+
+    // JSON hash tool modal event listeners
+    const openHashToolBtn = document.getElementById("open-hash-tool-btn");
+    const hashToolCloseBtn = document.getElementById("hash-tool-close-btn");
+    const hashToolBackdrop = document.querySelector("#hash-tool-modal .modal-backdrop");
+
+    if (openHashToolBtn) {
+      openHashToolBtn.addEventListener("click", () => HashToolManager.openModal());
+    }
+    if (hashToolCloseBtn) {
+      hashToolCloseBtn.addEventListener("click", () => HashToolManager.closeModal());
+    }
+    if (hashToolBackdrop) {
+      hashToolBackdrop.addEventListener("click", () => HashToolManager.closeModal());
     }
 
     // P2P collaboration event listeners

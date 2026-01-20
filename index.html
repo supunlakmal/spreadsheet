@@ -202,7 +202,75 @@
                     <i class="fa-solid fa-copy"></i> Copy JSON
                 </button>
             </div>
+
+            <button type="button" class="hash-tool-docs-toggle" id="json-docs-toggle">Show Schema Reference</button>
+            <div class="hash-tool-docs" id="json-docs">
+                <h4>Minified Schema Reference</h4>
+                <ul class="doc-list">
+                    <li><span class="doc-code">r</span> Row count</li>
+                    <li><span class="doc-code">c</span> Column count</li>
+                    <li><span class="doc-code">t</span> Theme (light/dark)</li>
+                    <li><span class="doc-code">d</span> Data (sparse [row, col, value])</li>
+                    <li><span class="doc-code">f</span> Formulas (sparse [row, col, formula])</li>
+                    <li><span class="doc-code">s</span> Styles (minified keys)</li>
+                    <li><span class="doc-code">w</span> Column widths</li>
+                </ul>
+            </div>
             <p id="json-error" class="modal-error hidden"></p>
+        </div>
+    </div>
+
+    <!-- JSON Hash Tool Modal -->
+    <div id="hash-tool-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content hash-tool-modal-content">
+            <div class="json-modal-header">
+                <h3>JSON Hash Tool</h3>
+                <button id="hash-tool-close-btn" type="button" class="modal-icon-btn" aria-label="Close JSON hash tool">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <p class="hash-tool-subtitle">Convert JSON to a shareable URL hash or decode a hash back to JSON. Encrypted
+                ENC: hashes require a password and cannot be decoded here.</p>
+            <div class="hash-tool-mode">
+                <button type="button" class="hash-tool-mode-btn active" data-mode="json-to-hash">JSON to Hash</button>
+                <button type="button" class="hash-tool-mode-btn" data-mode="hash-to-json">Hash to JSON</button>
+            </div>
+            <div class="hash-tool-grid">
+                <div class="hash-tool-section">
+                    <label for="hash-tool-input" id="hash-tool-input-label">JSON Input</label>
+                    <textarea id="hash-tool-input" spellcheck="false"
+                        placeholder="Paste JSON here (use Copy JSON from the app for the shortest links)."></textarea>
+                </div>
+                <div class="hash-tool-section">
+                    <label for="hash-tool-output" id="hash-tool-output-label">URL Hash</label>
+                    <textarea id="hash-tool-output" readonly placeholder="Output will appear here..."></textarea>
+                </div>
+            </div>
+            <div class="hash-tool-actions">
+                <button id="hash-tool-action-btn" type="button" class="modal-btn modal-btn-primary">Copy Link</button>
+            </div>
+            <div class="hash-tool-stats">
+                <div class="hash-tool-stat">Input: <span id="hash-tool-input-len">0</span> chars</div>
+                <div class="hash-tool-stat">Output: <span id="hash-tool-output-len">0</span> chars</div>
+                <div class="hash-tool-stat">Ratio: <span id="hash-tool-ratio">-</span></div>
+            </div>
+
+            <button type="button" class="hash-tool-docs-toggle" id="hash-tool-docs-toggle">Show Schema
+                Reference</button>
+            <div class="hash-tool-docs" id="hash-tool-docs">
+                <h4>Minified Schema Reference</h4>
+                <ul class="doc-list">
+                    <li><span class="doc-code">r</span> Row count</li>
+                    <li><span class="doc-code">c</span> Column count</li>
+                    <li><span class="doc-code">t</span> Theme (light/dark)</li>
+                    <li><span class="doc-code">d</span> Data (sparse [row, col, value])</li>
+                    <li><span class="doc-code">f</span> Formulas (sparse [row, col, formula])</li>
+                    <li><span class="doc-code">s</span> Styles (minified keys)</li>
+                    <li><span class="doc-code">w</span> Column widths</li>
+                </ul>
+            </div>
+            <p id="hash-tool-error" class="modal-error hidden"></p>
         </div>
     </div>
 
@@ -282,7 +350,10 @@
                         <button id="export-csv" type="button" class="tool-item"><i class="fa-solid fa-file-csv"></i>
                             Export CSV</button>
                         <button id="open-json-btn" type="button" class="tool-item"><i class="fa-solid fa-file-code"></i>
-                            Edit JSON</button>
+                            Copy JSON</button>
+                        <button id="open-hash-tool-btn" type="button" class="tool-item"><i
+                                class="fa-solid fa-hashtag"></i>
+                            JSON Hash Tool</button>
                     </div>
                 </div>
 

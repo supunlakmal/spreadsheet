@@ -112,6 +112,7 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 - **Raw Data Modal** - View and copy the minified spreadsheet state as JSON for AI edits
 - **Clipboard Ready** - Copy button for quick transfer to ChatGPT/Claude
 - **Safe Export** - Uses sanitized/minified state (only non-default values) for shorter prompts
+- **JSON Hash Tool** - Convert AI-edited JSON into a shareable URL hash, or decode a hash back to JSON
 
 ### Formula Support
 
