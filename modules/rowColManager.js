@@ -135,32 +135,88 @@ export function renderGrid() {
   corner.className = "corner-cell";
   container.appendChild(corner);
 
-  // Column headers (A-Z) - sticky to top
+  // Column headers (A-Z) - sticky to top with insertion triggers
   for (let col = 0; col < state.cols; col++) {
     const header = document.createElement("div");
     header.className = "header-cell col-header";
     header.textContent = colToLetter(col);
     header.dataset.col = col;
+    // Descending z-index so column A covers B's left edge if needed, and prevents B from covering A's overflow
+    header.style.zIndex = 20000 - col;
+    
     const colResize = document.createElement("div");
     colResize.className = "resize-handle col-resize";
     colResize.dataset.col = col;
     colResize.setAttribute("aria-hidden", "true");
     header.appendChild(colResize);
+    
+    // Insert trigger (after this column) - hover zone
+    const insertTrigger = document.createElement("div");
+    insertTrigger.className = "insert-trigger insert-trigger-col";
+    insertTrigger.dataset.insertCol = col;
+    insertTrigger.setAttribute("aria-label", `Insert column after ${colToLetter(col)}`);
+    header.appendChild(insertTrigger);
+    
+    // Insert line (visual indicator)
+    const insertLine = document.createElement("div");
+    insertLine.className = "insert-line insert-line-col";
+    header.appendChild(insertLine);
+    
+    // Insert button
+    const insertBtn = document.createElement("button");
+    insertBtn.className = "insert-btn insert-btn-col";
+    insertBtn.dataset.insertCol = col;
+    insertBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
+    insertBtn.setAttribute("aria-label", `Insert column after ${colToLetter(col)}`);
+    insertBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      insertColumnAt(col + 1);
+    });
+    header.appendChild(insertBtn);
+    
     container.appendChild(header);
   }
 
   // Rows
   for (let row = 0; row < state.rows; row++) {
-    // Row header (1, 2, 3...) - sticky to left
+    // Row header (1, 2, 3...) - sticky to left with insertion triggers
     const rowHeader = document.createElement("div");
     rowHeader.className = "header-cell row-header";
     rowHeader.textContent = row + 1;
     rowHeader.dataset.row = row;
+    // Descending z-index so Row 1 covers Row 2's top edge if needed, preventing Row 2 from covering Row 1's button
+    rowHeader.style.zIndex = 10000 - row;
+    
     const rowResize = document.createElement("div");
     rowResize.className = "resize-handle row-resize";
     rowResize.dataset.row = row;
     rowResize.setAttribute("aria-hidden", "true");
     rowHeader.appendChild(rowResize);
+    
+    // Insert trigger (after this row) - hover zone
+    const insertTrigger = document.createElement("div");
+    insertTrigger.className = "insert-trigger insert-trigger-row";
+    insertTrigger.dataset.insertRow = row;
+    insertTrigger.setAttribute("aria-label", `Insert row after ${row + 1}`);
+    rowHeader.appendChild(insertTrigger);
+    
+    // Insert line (visual indicator)
+    const insertLine = document.createElement("div");
+    insertLine.className = "insert-line insert-line-row";
+    rowHeader.appendChild(insertLine);
+    
+    // Insert button
+    const insertBtn = document.createElement("button");
+    insertBtn.className = "insert-btn insert-btn-row";
+    insertBtn.dataset.insertRow = row;
+    insertBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
+    insertBtn.setAttribute("aria-label", `Insert row after ${row + 1}`);
+    insertBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      insertRowAt(row + 1);
+    });
+    rowHeader.appendChild(insertBtn);
+    
     container.appendChild(rowHeader);
 
     // Data cells
@@ -877,6 +933,67 @@ export function addColumn() {
   if (callbacks.debouncedUpdateURL) callbacks.debouncedUpdateURL();
   showToast(`Column ${colToLetter(state.cols - 1)} added`, "success");
 }
+
+// Insert a row at a specific index (0-indexed), shifting existing rows down
+export function insertRowAt(index) {
+  if (state.rows >= MAX_ROWS) {
+    showToast(`Maximum ${MAX_ROWS} rows allowed`, "warning");
+    return;
+  }
+
+  // Clamp index to valid range
+  const insertIndex = Math.max(0, Math.min(index, state.rows));
+
+  const data = callbacks.getDataArray ? callbacks.getDataArray() : [];
+  const formulas = callbacks.getFormulasArray ? callbacks.getFormulasArray() : [];
+  const cellStyles = callbacks.getCellStylesArray ? callbacks.getCellStylesArray() : [];
+
+  state.rows++;
+
+  // Insert new empty row at the specified index
+  const newDataRow = Array(state.cols).fill("");
+  const newFormulaRow = Array(state.cols).fill("");
+  const newStyleRow = Array(state.cols).fill(null).map(() => createEmptyCellStyle());
+
+  data.splice(insertIndex, 0, newDataRow);
+  formulas.splice(insertIndex, 0, newFormulaRow);
+  cellStyles.splice(insertIndex, 0, newStyleRow);
+  state.rowHeights.splice(insertIndex, 0, DEFAULT_ROW_HEIGHT);
+
+  renderGrid();
+  if (callbacks.recalculateFormulas) callbacks.recalculateFormulas();
+  if (callbacks.debouncedUpdateURL) callbacks.debouncedUpdateURL();
+  showToast(`Row inserted at position ${insertIndex + 1}`, "success");
+}
+
+// Insert a column at a specific index (0-indexed), shifting existing columns right
+export function insertColumnAt(index) {
+  if (state.cols >= MAX_COLS) {
+    showToast(`Maximum ${MAX_COLS} columns allowed`, "warning");
+    return;
+  }
+
+  // Clamp index to valid range
+  const insertIndex = Math.max(0, Math.min(index, state.cols));
+
+  const data = callbacks.getDataArray ? callbacks.getDataArray() : [];
+  const formulas = callbacks.getFormulasArray ? callbacks.getFormulasArray() : [];
+  const cellStyles = callbacks.getCellStylesArray ? callbacks.getCellStylesArray() : [];
+
+  state.cols++;
+
+  // Insert empty cell at the specified column index in each row
+  data.forEach((row) => row.splice(insertIndex, 0, ""));
+  formulas.forEach((row) => row.splice(insertIndex, 0, ""));
+  cellStyles.forEach((row) => row.splice(insertIndex, 0, createEmptyCellStyle()));
+  state.colWidths.splice(insertIndex, 0, DEFAULT_COL_WIDTH);
+
+  renderGrid();
+  if (callbacks.recalculateFormulas) callbacks.recalculateFormulas();
+  if (callbacks.debouncedUpdateURL) callbacks.debouncedUpdateURL();
+  showToast(`Column ${colToLetter(insertIndex)} inserted`, "success");
+}
+
 
 // ========== Clear Spreadsheet ==========
 export function clearSpreadsheet() {

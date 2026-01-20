@@ -38,6 +38,8 @@ import {
   setCallbacks,
   setState,
   updateSelectionVisuals,
+  insertRowAt,
+  insertColumnAt,
 } from "./modules/rowColManager.js";
 import { escapeHTML, isValidCSSColor, sanitizeHTML } from "./modules/security.js";
 import { showToast } from "./modules/toastManager.js";
@@ -1001,6 +1003,42 @@ import {
       clearSelection();
       event.preventDefault();
       return;
+    }
+
+    // Ctrl+Shift+Arrow keys to insert rows/columns
+    if (event.ctrlKey && event.shiftKey) {
+      const target = event.target;
+      if (target.classList.contains("cell-content")) {
+        const row = parseInt(target.dataset.row, 10);
+        const col = parseInt(target.dataset.col, 10);
+
+        if (!isNaN(row) && !isNaN(col)) {
+          if (event.key === "ArrowDown") {
+            // Insert row below current
+            event.preventDefault();
+            insertRowAt(row + 1);
+            return;
+          }
+          if (event.key === "ArrowUp") {
+            // Insert row at current (shifting down)
+            event.preventDefault();
+            insertRowAt(row);
+            return;
+          }
+          if (event.key === "ArrowRight") {
+            // Insert column right
+            event.preventDefault();
+            insertColumnAt(col + 1);
+            return;
+          }
+          if (event.key === "ArrowLeft") {
+            // Insert column left
+            event.preventDefault();
+            insertColumnAt(col);
+            return;
+          }
+        }
+      }
     }
 
     // Delete/Backspace key clears selected cells

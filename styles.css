@@ -705,7 +705,7 @@ body.resizing {
     z-index: 2;
 }
 
-/* Corner cell (top-left) */
+/* Corner cell (top-left) - must be above all headers */
 .corner-cell {
     background-color: var(--bg-header);
     border: 1px solid var(--border-color);
@@ -713,9 +713,22 @@ body.resizing {
     border-bottom-color: #d0d0d0;
     position: sticky;
     top: 0;
-    z-index: 4; /* Fixed Z-Index issue */
+    z-index: 21000; /* Ensure corner stays on top of all column headers (which go up to ~20000) */
     left: 0;
     transition: background-color 0.3s;
+}
+
+/* Elevate hovered header so its insertion button renders ON TOP of neighbors */
+.header-cell:hover {
+    z-index: 30000 !important; /* Must be higher than the descending order max */
+}
+
+.header-cell.header-active {
+    background-color: var(--bg-cell-focus);
+    border-color: var(--accent-color);
+    color: var(--text-primary);
+    /* Active header also needs elevation or it might be covered */
+    z-index: 90; 
 }
 
 /* Data cells */
@@ -2299,5 +2312,191 @@ body.presentation-mode-active {
 @media (max-width: 600px) {
     .templates-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+/* ========== Row/Column Insertion Ghost Lines ========== */
+
+/* Insertion trigger zones on headers */
+.insert-trigger {
+    position: absolute;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.insert-trigger-row {
+    left: 0;
+    right: 0;
+    height: 12px;
+    bottom: -6px;
+    cursor: pointer;
+}
+
+.insert-trigger-col {
+    top: 0;
+    bottom: 0;
+    width: 12px;
+    right: -6px;
+    cursor: pointer;
+}
+
+/* Insertion line (the visual indicator) */
+.insert-line {
+    position: absolute;
+    background: linear-gradient(90deg, var(--accent-color), #22d3ee);
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.15s ease;
+    pointer-events: none;
+    z-index: 15;
+}
+
+.insert-line-row {
+    display: none; /* User requested to hide the ghost line */
+}
+
+.insert-line-col {
+    display: none; /* User requested to hide the ghost line */
+}
+
+/* Insert button */
+.insert-btn {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    /* Default Dot Style */
+    background: var(--accent-color);
+    border: 2px solid transparent; 
+    color: transparent; 
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 1; /* Always visible as dot */
+    transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s, color 0.2s, border-color 0.2s;
+    z-index: 20;
+    box-shadow: 0 1px 4px rgba(74, 144, 217, 0.2);
+}
+
+.insert-btn-row {
+    left: 50%;
+    transform: translateX(-50%) scale(0.35); /* Default small dot */
+    bottom: -10px;
+}
+
+.insert-btn-col {
+    top: 50%;
+    transform: translateY(-50%) scale(0.35); /* Default small dot */
+    right: -10px;
+}
+
+.insert-btn i {
+    font-size: 10px;
+    line-height: 1;
+}
+
+/* Initial trigger hover - classes kept for potential future use */
+/* Empty rulesets removed to clear lint warnings */
+
+/* Button Hover: Expand to BUTTON */
+/* Button Hover: Expand to BUTTON */
+.insert-btn-row:hover {
+    transform: translateX(-50%) scale(1.15) !important;
+    color: white;
+    background: linear-gradient(135deg, var(--accent-color), #22d3ee); /* Gradient for button */
+    border-color: white; /* Restore border */
+    box-shadow: 0 4px 16px rgba(74, 144, 217, 0.5), 0 0 0 4px rgba(74, 144, 217, 0.15);
+    z-index: 101; /* Ensure hovered button is top */
+}
+
+.insert-btn-col:hover {
+    transform: translateY(-50%) scale(1.15) !important;
+    color: white;
+    background: linear-gradient(135deg, var(--accent-color), #22d3ee);
+    border-color: white;
+    box-shadow: 0 4px 16px rgba(74, 144, 217, 0.5), 0 0 0 4px rgba(74, 144, 217, 0.15);
+    z-index: 101;
+}
+
+/* Keep visible when hovering the button itself */
+.insert-btn:hover ~ .insert-line,
+.header-cell:has(.insert-btn:hover) .insert-line {
+    opacity: 1;
+}
+
+/* First row/col special positioning */
+.insert-trigger-row-top {
+    top: -6px;
+    bottom: auto;
+}
+
+.insert-line-row-top {
+    top: -1px;
+    bottom: auto;
+}
+
+.insert-btn-row-top {
+    top: -10px;
+    bottom: auto;
+}
+
+.insert-trigger-col-left {
+    left: -6px;
+    right: auto;
+}
+
+.insert-line-col-left {
+    left: -1px;
+    right: auto;
+}
+
+.insert-btn-col-left {
+    left: -10px;
+    right: auto;
+}
+
+/* Dark mode adjustments */
+.dark-mode .insert-btn {
+    border-color: var(--bg-secondary);
+}
+
+.dark-mode .insert-line {
+    box-shadow: 0 0 12px var(--accent-color), 0 0 24px rgba(90, 159, 233, 0.5);
+}
+
+/* Read-only mode - hide insertion UI */
+.readonly-mode .insert-trigger,
+.readonly-mode .insert-line,
+.readonly-mode .insert-btn {
+    display: none;
+}
+
+/* Mobile - larger touch targets */
+@media (max-width: 768px) {
+    .insert-trigger-row {
+        height: 20px;
+        bottom: -10px;
+    }
+    
+    .insert-trigger-col {
+        width: 20px;
+        right: -10px;
+    }
+    
+    .insert-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 14px;
+    }
+    
+    .insert-btn-row {
+        bottom: -14px;
+    }
+    
+    .insert-btn-col {
+        right: -14px;
     }
 }
