@@ -12,6 +12,10 @@ import { HashToolManager } from "./modules/hashToolManager.js";
 import { P2PManager } from "./modules/p2pManager.js";
 import { PresentationManager } from "./modules/presentationManager.js";
 import { TemplateManager } from "./modules/templateManager.js";
+import { ThemeManager } from "./modules/themeManager.js";
+import { UIModeManager } from "./modules/uiModeManager.js";
+import { QRCodeManager } from "./modules/qrCodeManager.js";
+import { CellFormattingManager } from "./modules/cellFormattingManager.js";
 import {
   addColumn,
   addRow,
@@ -84,9 +88,6 @@ import {
   // Debounce timer
   let debounceTimer = null;
   let dependencyDrawQueued = false;
-
-  // Safe limit before QR codes become unreadable on most phone cameras
-  const MAX_QR_URL_LENGTH = 2000;
 
   // Formula range selection mode (for clicking to select ranges like Google Sheets)
   let formulaEditMode = false; // true when typing a formula
@@ -239,11 +240,6 @@ import {
     }
   }
 
-  // Get current theme
-  function isDarkMode() {
-    return document.body.classList.contains("dark-mode");
-  }
-
   // Normalization functions moved to modules/urlManager.js
 
   function extractPlainText(value) {
@@ -360,26 +356,13 @@ import {
   // Handles state serialization without encryption concerns
   // Codec, validation, and decode functions moved to modules/urlManager.js
 
-  // Apply theme to body
-  function applyTheme(theme) {
-    if (theme === "dark") {
-      document.body.classList.add("dark-mode");
-    } else if (theme === "light") {
-      document.body.classList.remove("dark-mode");
-    }
-    // Save to localStorage as well
-    try {
-      localStorage.setItem("spreadsheet-theme", theme);
-    } catch (e) {}
-  }
-
   // Build current state object (only includes non-empty/non-default values)
   function buildCurrentState() {
     const { rows, cols, colWidths, rowHeights } = getState();
     const stateObj = {
       rows,
       cols,
-      theme: isDarkMode() ? "dark" : "light",
+      theme: ThemeManager.isDarkMode() ? "dark" : "light",
     };
 
     // Only include readOnly if true (saves URL bytes)
@@ -449,128 +432,6 @@ import {
     DependencyTracer.init();
     scheduleDependencyDraw();
   }
-  // ========== Read-Only Mode Helper Functions ==========
-
-  // Apply read-only mode UI state
-  function applyReadOnlyMode() {
-    document.body.classList.add("readonly-mode");
-
-    // Set contentEditable on all cells
-    const container = document.getElementById("spreadsheet");
-    if (container) {
-      container.querySelectorAll(".cell-content").forEach((cell) => {
-        cell.contentEditable = "false";
-      });
-    }
-
-    // Update toggle button
-    const toggleBtn = document.getElementById("toggle-readonly");
-    if (toggleBtn) {
-      toggleBtn.classList.add("active");
-      const icon = toggleBtn.querySelector("i");
-      if (icon) icon.className = "fa-solid fa-eye";
-    }
-
-    // Show banner
-    const banner = document.getElementById("readonly-banner");
-    if (banner) banner.classList.remove("hidden");
-  }
-
-  // Clear read-only mode UI state
-  function clearReadOnlyMode() {
-    document.body.classList.remove("readonly-mode");
-
-    // Reset contentEditable
-    const container = document.getElementById("spreadsheet");
-    if (container) {
-      container.querySelectorAll(".cell-content").forEach((cell) => {
-        cell.contentEditable = "true";
-      });
-    }
-
-    // Update toggle button
-    const toggleBtn = document.getElementById("toggle-readonly");
-    if (toggleBtn) {
-      toggleBtn.classList.remove("active");
-      const icon = toggleBtn.querySelector("i");
-      if (icon) icon.className = "fa-solid fa-pen-to-square";
-    }
-
-    // Hide banner
-    const banner = document.getElementById("readonly-banner");
-    if (banner) banner.classList.add("hidden");
-  }
-
-  // Apply embed mode UI state
-  function applyEmbedMode() {
-    document.body.classList.add("embed-mode");
-    isReadOnly = true;
-    applyReadOnlyMode();
-  }
-
-  // Clear embed mode UI state
-  function clearEmbedMode() {
-    document.body.classList.remove("embed-mode");
-  }
-
-  // Toggle read-only mode
-  function toggleReadOnlyMode() {
-    isReadOnly = !isReadOnly;
-    applyReadOnlyState(isReadOnly);
-    showToast(isReadOnly ? "Read-only mode enabled - Share this link for view-only access" : "Edit mode enabled", "success");
-
-    // Update URL immediately (no debounce)
-    updateURL();
-    scheduleFullSync();
-  }
-
-  // Generate embed code
-  async function generateEmbedCode() {
-    if (isEmbedMode) {
-      showToast("Already in embed mode. Share current URL instead.", "warning");
-      return null;
-    }
-
-    const currentState = buildCurrentState();
-    currentState.embed = 1;
-    currentState.readOnly = 1;
-
-    const encoded = await URLManager.encodeState(currentState, PasswordManager.getPassword());
-    const embedURL = window.location.origin + window.location.pathname + "#" + encoded;
-
-    if (embedURL.length > 2000) {
-      showToast("Warning: Embed URL is very long", "warning");
-    }
-
-    return `<iframe
-    src="${embedURL}"
-    width="800"
-    height="600"
-    frameborder="0"
-    style="border: 1px solid #e0e0e0; border-radius: 8px;"
-    title="Embedded Spreadsheet">
-</iframe>`;
-  }
-
-  // Show embed modal with generated code
-  async function showEmbedModal() {
-    const embedCode = await generateEmbedCode();
-    if (!embedCode) return;
-
-    const modal = document.getElementById("embed-modal");
-    const textarea = document.getElementById("embed-code-textarea");
-
-    textarea.value = embedCode;
-    modal.classList.remove("hidden");
-    textarea.select();
-  }
-
-  // Hide embed modal
-  function hideEmbedModal() {
-    const modal = document.getElementById("embed-modal");
-    modal.classList.add("hidden");
-  }
-
   // Handle input changes
   function handleInput(event) {
     const target = event.target;
@@ -1107,174 +968,6 @@ import {
 
   // Resize and Touch handlers moved to modules/rowColManager.js
 
-  function forEachTargetCell(callback) {
-    const bounds = getSelectionBounds();
-    if (bounds) {
-      for (let r = bounds.minRow; r <= bounds.maxRow; r++) {
-        for (let c = bounds.minCol; c <= bounds.maxCol; c++) {
-          callback(r, c);
-        }
-      }
-      return true;
-    }
-
-    const activeElement = document.activeElement;
-    if (activeElement && activeElement.classList.contains("cell-content")) {
-      const row = parseInt(activeElement.dataset.row, 10);
-      const col = parseInt(activeElement.dataset.col, 10);
-      if (!isNaN(row) && !isNaN(col)) {
-        callback(row, col);
-        return true;
-      }
-    }
-
-    const { activeRow, activeCol } = getState();
-    if (activeRow !== null && activeCol !== null) {
-      callback(activeRow, activeCol);
-      return true;
-    }
-
-    return false;
-  }
-
-  function applyAlignment(align) {
-    const normalized = normalizeAlignment(align);
-    if (!normalized) return;
-
-    const updated = forEachTargetCell(function (row, col) {
-      if (!cellStyles[row]) cellStyles[row] = [];
-      if (!cellStyles[row][col]) cellStyles[row][col] = createEmptyCellStyle();
-      cellStyles[row][col].align = normalized;
-
-      const cellContent = getCellContentElement(row, col);
-      if (cellContent) {
-        cellContent.style.textAlign = normalized;
-      }
-    });
-
-    if (updated) {
-      debouncedUpdateURL();
-      scheduleFullSync();
-    }
-  }
-
-  function applyCellBackground(color) {
-    if (!isValidCSSColor(color)) return;
-
-    const updated = forEachTargetCell(function (row, col) {
-      if (!cellStyles[row]) cellStyles[row] = [];
-      if (!cellStyles[row][col]) cellStyles[row][col] = createEmptyCellStyle();
-      cellStyles[row][col].bg = color;
-
-      const cell = getCellElement(row, col);
-      if (cell) {
-        if (color) {
-          cell.style.setProperty("--cell-bg", color);
-        } else {
-          cell.style.removeProperty("--cell-bg");
-        }
-      }
-    });
-
-    if (updated) {
-      debouncedUpdateURL();
-      scheduleFullSync();
-    }
-  }
-
-  function applyCellTextColor(color) {
-    if (!isValidCSSColor(color)) return;
-
-    const updated = forEachTargetCell(function (row, col) {
-      if (!cellStyles[row]) cellStyles[row] = [];
-      if (!cellStyles[row][col]) cellStyles[row][col] = createEmptyCellStyle();
-      cellStyles[row][col].color = color;
-
-      const cellContent = getCellContentElement(row, col);
-      if (cellContent) {
-        cellContent.style.color = color;
-      }
-    });
-
-    if (updated) {
-      debouncedUpdateURL();
-      scheduleFullSync();
-    }
-  }
-
-  function applyFontSize(size) {
-    const normalized = normalizeFontSize(size);
-
-    const updated = forEachTargetCell(function (row, col) {
-      if (!cellStyles[row]) cellStyles[row] = [];
-      if (!cellStyles[row][col]) cellStyles[row][col] = createEmptyCellStyle();
-      cellStyles[row][col].fontSize = normalized;
-
-      const cellContent = getCellContentElement(row, col);
-      if (cellContent) {
-        cellContent.style.fontSize = normalized ? `${normalized}px` : "";
-      }
-    });
-
-    if (updated) {
-      debouncedUpdateURL();
-      scheduleFullSync();
-    }
-  }
-
-  // Apply text formatting using modern Selection/Range API (replaces deprecated execCommand)
-  function applyFormat(command) {
-    const selection = window.getSelection();
-    if (!selection || !selection.rangeCount) return;
-
-    const range = selection.getRangeAt(0);
-    const selectedText = range.toString();
-    if (!selectedText) return;
-
-    // Create wrapper element based on command
-    let wrapper;
-    switch (command) {
-      case "bold":
-        wrapper = document.createElement("b");
-        break;
-      case "italic":
-        wrapper = document.createElement("i");
-        break;
-      case "underline":
-        wrapper = document.createElement("u");
-        break;
-      default:
-        return;
-    }
-
-    // Only proceed if selection is within a cell-content element
-    const activeElement = document.activeElement;
-    if (!activeElement || !activeElement.classList.contains("cell-content")) return;
-
-    try {
-      // Wrap the selected content
-      range.surroundContents(wrapper);
-    } catch (e) {
-      // surroundContents fails if selection crosses element boundaries
-      // Fall back to extracting and re-inserting
-      const fragment = range.extractContents();
-      wrapper.appendChild(fragment);
-      range.insertNode(wrapper);
-    }
-
-    // Update data after formatting
-    const row = parseInt(activeElement.dataset.row, 10);
-    const col = parseInt(activeElement.dataset.col, 10);
-    const { rows, cols } = getState();
-    if (!isNaN(row) && !isNaN(col) && row < rows && col < cols) {
-      data[row][col] = sanitizeHTML(activeElement.innerHTML);
-      debouncedUpdateURL();
-      if (canBroadcastP2P()) {
-        P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
-      }
-    }
-  }
-
   // Handle paste to strip unwanted HTML
   function handlePaste(event) {
     const target = event.target;
@@ -1330,16 +1023,16 @@ import {
 
         // Apply theme from URL if present
         if (loadedState.theme) {
-          applyTheme(loadedState.theme);
+          ThemeManager.applyTheme(loadedState.theme);
         }
 
         // Load read-only mode
-        applyReadOnlyState(loadedState.readOnly);
+        UIModeManager.applyReadOnlyState(loadedState.readOnly);
 
         // Load embed mode
         isEmbedMode = loadedState.embed || false;
         if (isEmbedMode) {
-          applyEmbedMode();
+          UIModeManager.applyEmbedMode();
         }
 
         return true;
@@ -1356,193 +1049,13 @@ import {
     formulas = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
     isReadOnly = false;
     isEmbedMode = false;
-    clearReadOnlyMode();
-    clearEmbedMode();
+    UIModeManager.clearReadOnlyMode();
+    UIModeManager.clearEmbedMode();
     return true;
-  }
-
-  // Toggle dark/light mode
-  function toggleTheme() {
-    const body = document.body;
-    const isDark = body.classList.toggle("dark-mode");
-    const theme = isDark ? "dark" : "light";
-
-    // Save preference to localStorage
-    try {
-      localStorage.setItem("spreadsheet-theme", theme);
-    } catch (e) {
-      // localStorage not available
-    }
-
-    // Update URL with new theme
-    debouncedUpdateURL();
-    scheduleFullSync();
-  }
-
-  // Load saved theme preference
-  function loadTheme() {
-    try {
-      const savedTheme = localStorage.getItem("spreadsheet-theme");
-      if (savedTheme === "dark") {
-        document.body.classList.add("dark-mode");
-      } else if (savedTheme === "light") {
-        document.body.classList.remove("dark-mode");
-      } else {
-        // Check system preference if no saved preference
-        if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-          document.body.classList.add("dark-mode");
-        }
-      }
-    } catch (e) {
-      // localStorage not available
-    }
-  }
-
-  // Copy URL to clipboard
-  function copyURL() {
-    const url = window.location.href;
-    const copyBtn = document.getElementById("copy-url");
-
-    navigator.clipboard
-      .writeText(url)
-      .then(function () {
-        // Show success feedback
-        showToast("Link copied to clipboard!", "success");
-        if (copyBtn) {
-          copyBtn.classList.add("copied");
-          const icon = copyBtn.querySelector("i");
-          if (icon) {
-            icon.className = "fa-solid fa-check";
-          }
-
-          // Reset after 2 seconds
-          setTimeout(function () {
-            copyBtn.classList.remove("copied");
-            if (icon) {
-              icon.className = "fa-solid fa-copy";
-            }
-          }, 2000);
-        }
-      })
-      .catch(function (err) {
-        console.error("Failed to copy URL:", err);
-        // Fallback for older browsers
-        const textArea = document.createElement("textarea");
-        textArea.value = url;
-        textArea.style.position = "fixed";
-        textArea.style.opacity = "0";
-        document.body.appendChild(textArea);
-        textArea.select();
-        try {
-          document.execCommand("copy");
-          if (copyBtn) {
-            copyBtn.classList.add("copied");
-            setTimeout(function () {
-              copyBtn.classList.remove("copied");
-            }, 2000);
-          }
-        } catch (e) {
-          console.error("Fallback copy failed:", e);
-        }
-        document.body.removeChild(textArea);
-      });
-  }
-
-  // Generate and display QR code for the current URL
-  async function showQRModalWithCode() {
-    const modal = document.getElementById("qr-modal");
-    const container = document.getElementById("qrcode-container");
-    const warningText = document.getElementById("qr-warning");
-
-    if (!modal || !container) return;
-
-    if (typeof QRCode !== "function") {
-      alert("QR Generator module not loaded.");
-      return;
-    }
-
-    // Ensure formulas are fresh and the latest state is encoded into the URL
-    recalculateFormulas();
-    try {
-      await updateURL();
-    } catch (err) {
-      console.error("Failed to sync data before generating QR", err);
-      alert("Could not prepare data for QR code.");
-      return;
-    }
-
-    const currentUrl = window.location.href;
-
-    container.innerHTML = "";
-    if (warningText) {
-      warningText.textContent = "";
-      warningText.classList.add("hidden");
-    }
-
-    if (currentUrl.length > MAX_QR_URL_LENGTH) {
-      if (warningText) {
-        warningText.textContent = `Spreadsheet too large for QR transfer (${currentUrl.length} characters). Remove some data and try again.`;
-        warningText.classList.remove("hidden");
-      }
-      modal.classList.remove("hidden");
-      return;
-    }
-
-    try {
-      new QRCode(container, {
-        text: currentUrl,
-        width: 240,
-        height: 240,
-        colorDark: "#000000",
-        colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.M,
-      });
-      modal.classList.remove("hidden");
-    } catch (e) {
-      console.error("QR Library missing or error", e);
-      alert("Could not generate QR code.");
-    }
-  }
-
-  function hideQRModal() {
-    const modal = document.getElementById("qr-modal");
-    const container = document.getElementById("qrcode-container");
-    const warningText = document.getElementById("qr-warning");
-
-    if (modal) {
-      modal.classList.add("hidden");
-    }
-    if (container) {
-      container.innerHTML = "";
-    }
-    if (warningText) {
-      warningText.textContent = "";
-      warningText.classList.add("hidden");
-    }
   }
 
   // ========== Password/Encryption Modal Functions ==========
   // Handled by PasswordManager module
-
-  /**
-   * Apply read-only state to the spreadsheet
-   * @param {boolean} readOnlyFlag - Whether to enable read-only mode
-   */
-  function applyReadOnlyState(readOnlyFlag) {
-    // If in embed mode, always stay read-only
-    if (isEmbedMode) {
-      isReadOnly = true;
-      applyReadOnlyMode();
-      return;
-    }
-
-    isReadOnly = readOnlyFlag || false;
-    if (isReadOnly) {
-      applyReadOnlyMode();
-    } else {
-      clearReadOnlyMode();
-    }
-  }
 
   // Apply loaded state to variables
   function applyLoadedState(loadedState) {
@@ -1608,18 +1121,18 @@ import {
     setState("rowHeights", normalizeRowHeights(loadedState.rowHeights, r));
 
     if (loadedState.theme) {
-      applyTheme(loadedState.theme);
+      ThemeManager.applyTheme(loadedState.theme);
     }
 
     isEmbedMode = Boolean(loadedState.embed);
     if (isEmbedMode) {
-      applyEmbedMode();
+      UIModeManager.applyEmbedMode();
     } else {
-      clearEmbedMode();
+      UIModeManager.clearEmbedMode();
     }
 
     // Apply read-only mode if present (embed mode forces read-only)
-    applyReadOnlyState(loadedState.readOnly);
+    UIModeManager.applyReadOnlyState(loadedState.readOnly);
   }
 
   // Initialize the app
@@ -1704,8 +1217,59 @@ import {
       },
     });
 
+    // Initialize Theme Manager
+    ThemeManager.init({
+      debouncedUpdateURL,
+      scheduleFullSync,
+    });
+
+    // Initialize UI Mode Manager
+    UIModeManager.init({
+      buildCurrentState,
+      updateURL,
+      scheduleFullSync,
+      showToast,
+      URLManager,
+      PasswordManager,
+      getReadOnlyFlag: () => isReadOnly,
+      setReadOnlyFlag: (val) => {
+        isReadOnly = val;
+      },
+      getEmbedModeFlag: () => isEmbedMode,
+      setEmbedModeFlag: (val) => {
+        isEmbedMode = val;
+      },
+    });
+
+    // Initialize QR Code Manager
+    QRCodeManager.init({
+      recalculateFormulas,
+      updateURL,
+      showToast,
+    });
+
+    // Initialize Cell Formatting Manager
+    CellFormattingManager.init({
+      getSelectionBounds,
+      getCellContentElement,
+      getCellElement,
+      getCellStylesArray,
+      getDataArray,
+      getFormulasArray,
+      getState,
+      debouncedUpdateURL,
+      scheduleFullSync,
+      normalizeAlignment,
+      normalizeFontSize,
+      isValidCSSColor,
+      sanitizeHTML,
+      createEmptyCellStyle,
+      canBroadcastP2P,
+      P2PManager,
+    });
+
     // Load theme preference first (before any rendering)
-    loadTheme();
+    ThemeManager.loadTheme();
 
     // Load any existing state from URL
     loadStateFromURL();
@@ -1801,47 +1365,47 @@ import {
     if (boldBtn) {
       boldBtn.addEventListener("mousedown", function (e) {
         e.preventDefault(); // Prevent focus loss
-        applyFormat("bold");
+        CellFormattingManager.applyFormat("bold");
       });
     }
     if (italicBtn) {
       italicBtn.addEventListener("mousedown", function (e) {
         e.preventDefault();
-        applyFormat("italic");
+        CellFormattingManager.applyFormat("italic");
       });
     }
     if (underlineBtn) {
       underlineBtn.addEventListener("mousedown", function (e) {
         e.preventDefault();
-        applyFormat("underline");
+        CellFormattingManager.applyFormat("underline");
       });
     }
     if (alignLeftBtn) {
       alignLeftBtn.addEventListener("mousedown", function (e) {
         e.preventDefault();
-        applyAlignment("left");
+        CellFormattingManager.applyAlignment("left");
       });
     }
     if (alignCenterBtn) {
       alignCenterBtn.addEventListener("mousedown", function (e) {
         e.preventDefault();
-        applyAlignment("center");
+        CellFormattingManager.applyAlignment("center");
       });
     }
     if (alignRightBtn) {
       alignRightBtn.addEventListener("mousedown", function (e) {
         e.preventDefault();
-        applyAlignment("right");
+        CellFormattingManager.applyAlignment("right");
       });
     }
     if (cellBgPicker) {
       cellBgPicker.addEventListener("input", function (e) {
-        applyCellBackground(e.target.value);
+        CellFormattingManager.applyCellBackground(e.target.value);
       });
     }
     if (cellTextColorPicker) {
       cellTextColorPicker.addEventListener("input", function (e) {
-        applyCellTextColor(e.target.value);
+        CellFormattingManager.applyCellTextColor(e.target.value);
       });
     }
     if (fontSizeList) {
@@ -1853,7 +1417,7 @@ import {
       fontSizeList.addEventListener("click", function (e) {
         const button = e.target.closest("button[data-size]");
         if (!button) return;
-        applyFontSize(button.dataset.size);
+        CellFormattingManager.applyFontSize(button.dataset.size);
       });
     }
 
@@ -1894,10 +1458,10 @@ import {
       });
     }
     if (themeToggleBtn) {
-      themeToggleBtn.addEventListener("click", toggleTheme);
+      themeToggleBtn.addEventListener("click", () => ThemeManager.toggleTheme());
     }
     if (copyUrlBtn) {
-      copyUrlBtn.addEventListener("click", copyURL);
+      copyUrlBtn.addEventListener("click", () => QRCodeManager.copyURL());
     }
     if (importCsvBtn && importCsvInput) {
       importCsvBtn.addEventListener("click", function () {
@@ -1936,13 +1500,13 @@ import {
       });
     }
     if (qrBtn) {
-      qrBtn.addEventListener("click", showQRModalWithCode);
+      qrBtn.addEventListener("click", () => QRCodeManager.showQRModal());
     }
     if (qrCloseBtn) {
-      qrCloseBtn.addEventListener("click", hideQRModal);
+      qrCloseBtn.addEventListener("click", () => QRCodeManager.hideQRModal());
     }
     if (qrBackdrop) {
-      qrBackdrop.addEventListener("click", hideQRModal);
+      qrBackdrop.addEventListener("click", () => QRCodeManager.hideQRModal());
     }
     if (traceDepsBtn) {
       traceDepsBtn.addEventListener("click", () => {
@@ -1961,7 +1525,7 @@ import {
     // Embed mode event listeners
     const generateEmbedBtn = document.getElementById("generate-embed");
     if (generateEmbedBtn) {
-      generateEmbedBtn.addEventListener("click", showEmbedModal);
+      generateEmbedBtn.addEventListener("click", () => UIModeManager.showEmbedModal());
     }
 
     const embedCopyBtn = document.getElementById("embed-copy-btn");
@@ -1985,12 +1549,12 @@ import {
 
     const embedCloseBtn = document.getElementById("embed-close-btn");
     if (embedCloseBtn) {
-      embedCloseBtn.addEventListener("click", hideEmbedModal);
+      embedCloseBtn.addEventListener("click", () => UIModeManager.hideEmbedModal());
     }
 
     const embedBackdrop = document.querySelector("#embed-modal .modal-backdrop");
     if (embedBackdrop) {
-      embedBackdrop.addEventListener("click", hideEmbedModal);
+      embedBackdrop.addEventListener("click", () => UIModeManager.hideEmbedModal());
     }
 
     // JSON editor modal event listeners
@@ -2108,14 +1672,14 @@ import {
     // Read-only mode event listeners
     const toggleReadOnlyBtn = document.getElementById("toggle-readonly");
     if (toggleReadOnlyBtn) {
-      toggleReadOnlyBtn.addEventListener("click", toggleReadOnlyMode);
+      toggleReadOnlyBtn.addEventListener("click", () => UIModeManager.toggleReadOnlyMode());
     }
 
     const enableEditingBtn = document.getElementById("enable-editing");
     if (enableEditingBtn) {
       enableEditingBtn.addEventListener("click", function () {
         if (isReadOnly) {
-          toggleReadOnlyMode();
+          UIModeManager.toggleReadOnlyMode();
         }
       });
     }
