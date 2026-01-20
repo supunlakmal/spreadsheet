@@ -291,20 +291,41 @@ Caddy will automatically obtain and renew certificates.
 
 Your spreadsheet state is stored entirely in the URL hash. The hash is LZ-String compressed JSON to keep links short, and only non-default data is included. When password protection is enabled, that compressed string is encrypted with AES-GCM (256-bit) using a PBKDF2-derived key (100k iterations, random salt/IV) and stored as URL-safe Base64 with an `ENC:` prefix. The password never leaves the browser; recipients must enter it to decrypt locally.
 
-Example state (decompressed, before encryption):
+Example state (decompressed, before encryption, minified format used by `templates.json`):
 
 ```
 {
-  "rows": 2,
-  "cols": 2,
-  "data": [["A1", "B1"], ["A2", "B2"]],
-  "formulas": [["", "=SUM(A1:A2)"]],
-  "cellStyles": [[{"align": "center", "bg": "#f5f5f5", "color": "#111", "fontSize": "14"}]],
-  "colWidths": [120, 100],
-  "rowHeights": [32, 32],
-  "theme": "light"
+  "r": 2,
+  "c": 2,
+  "t": "light",
+  "d": [
+    [0, 0, "1"],
+    [1, 0, "2"],
+    [1, 1, "3"]
+  ],
+  "f": [
+    [1, 1, "=SUM(A1:A2)"]
+  ],
+  "s": [
+    [0, 0, { "a": "center", "b": "#f5f5f5", "c": "#111", "z": "14" }]
+  ],
+  "w": [120, 100],
+  "h": [32, 32]
 }
 ```
+
+### Schema (minified)
+
+- `r`: row count
+- `c`: column count
+- `t`: theme (`"light"` or `"dark"`)
+- `d`: data as sparse triplets `[row, col, value]` (only non-empty cells)
+- `f`: formulas as sparse triplets `[row, col, "=FORMULA()"]`
+- `s`: cell styles as sparse triplets `[row, col, { a, b, c, z }]` where `a` align, `b` background, `c` text color, `z` font size
+- `w`: column widths array (length = `c`, optional)
+- `h`: row heights array (length = `r`, optional)
+
+Missing keys imply defaults; sparse arrays are expanded to dense grids on load.
 
 When you edit cells, the URL updates automatically (debounced at 200ms). Formulas are stored separately from displayed values, so both the results and the original formulas are preserved. Column widths, row heights, and cell styles are saved too. Incoming URL state is sanitized and validated (DOMParser whitelist, formula regex, safe JSON parsing), oversized hashes are rejected, and legacy uncompressed hashes are still supported.
 
