@@ -2078,57 +2078,6 @@ import {
       });
     }
 
-    // Password/Encryption event listeners
-    // Password/Encryption event listeners handled by PasswordManager
-    /*
-    const lockBtn = document.getElementById("lock-btn");
-    const modalCancel = document.getElementById("modal-cancel");
-    const modalSubmit = document.getElementById("modal-submit");
-    const modalBackdrop = document.querySelector(".modal-backdrop");
-    const passwordInput = document.getElementById("password-input");
-
-    if (lockBtn) {
-      lockBtn.addEventListener("click", handleLockButtonClick);
-    }
-    if (modalCancel) {
-      modalCancel.addEventListener("click", hidePasswordModal);
-    }
-    if (modalSubmit) {
-      modalSubmit.addEventListener("click", handleModalSubmit);
-    }
-    if (modalBackdrop) {
-      modalBackdrop.addEventListener("click", function () {
-        // Only allow closing if not in decrypt mode (user must enter password)
-        if (modalMode !== "decrypt") {
-          hidePasswordModal();
-        }
-      });
-    }
-    if (passwordInput) {
-      passwordInput.addEventListener("keydown", function (e) {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          const confirmInput = document.getElementById("password-confirm");
-          // If confirm is visible and empty, focus it; otherwise submit
-          if (confirmInput && confirmInput.style.display !== "none" && !confirmInput.value) {
-            confirmInput.focus();
-          } else {
-            handleModalSubmit();
-          }
-        }
-      });
-    }
-    const passwordConfirm = document.getElementById("password-confirm");
-    if (passwordConfirm) {
-      passwordConfirm.addEventListener("keydown", function (e) {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          handleModalSubmit();
-        }
-      });
-    }
-    */
-
     // Handle browser back/forward
     window.addEventListener("hashchange", function () {
       loadStateFromURL();
@@ -2145,74 +2094,6 @@ import {
     init();
   }
 
-  // Expose audit function globally for testing URL sizes
-  window.auditURLSize = async function () {
-    const scenarios = [
-      { name: "Empty 30x15", rows: 30, cols: 15, fill: null },
-      { name: "Short text (A1, B1...)", rows: 30, cols: 15, fill: "coords" },
-      { name: "Medium text (10 chars)", rows: 30, cols: 15, fill: "medium" },
-      { name: "Numbers only", rows: 30, cols: 15, fill: "numbers" },
-      { name: "With formulas", rows: 30, cols: 15, fill: "formulas" },
-    ];
-
-    console.log("=== URL Size Audit ===");
-    console.log("Max grid: 30 rows x 15 cols = 450 cells\n");
-
-    for (const scenario of scenarios) {
-      const testData = [];
-      for (let r = 0; r < scenario.rows; r++) {
-        const row = [];
-        for (let c = 0; c < scenario.cols; c++) {
-          const colLetter = String.fromCharCode(65 + c);
-          const cellRef = colLetter + (r + 1);
-          switch (scenario.fill) {
-            case "coords":
-              row.push(cellRef);
-              break;
-            case "medium":
-              row.push("Text_" + cellRef.padEnd(5, "X"));
-              break;
-            case "numbers":
-              row.push(String(Math.floor(Math.random() * 10000)));
-              break;
-            case "formulas":
-              // Only put formulas in some cells to simulate realistic usage
-              if (r > 0 && c === 0) {
-                row.push("=SUM(B" + (r + 1) + ":O" + (r + 1) + ")");
-              } else {
-                row.push(String(Math.floor(Math.random() * 100)));
-              }
-              break;
-            default:
-              row.push("");
-          }
-        }
-        testData.push(row);
-      }
-
-      const state = {
-        rows: scenario.rows,
-        cols: scenario.cols,
-        theme: "light",
-        data: testData,
-      };
-
-      const json = JSON.stringify(state);
-      const compressed = LZString.compressToEncodedURIComponent(json);
-
-      console.log(`${scenario.name}:`);
-      console.log(`  JSON size: ${json.length.toLocaleString()} chars`);
-      console.log(`  Compressed: ${compressed.length.toLocaleString()} chars`);
-      console.log(`  Compression ratio: ${((1 - compressed.length / json.length) * 100).toFixed(1)}%`);
-      console.log("");
-    }
-
-    console.log("=== Thresholds ===");
-    console.log("< 2,000 chars: OK (safe for all browsers)");
-    console.log("2,000-4,000: Warning (some older browsers may truncate)");
-    console.log("4,000-8,000: Caution (URL shorteners may fail)");
-    console.log("> 8,000: Critical (some browsers may fail)");
-  };
   // ========== Toolbar Scroll Logic ==========
   function initToolbarScroll() {
     const toolbar = document.querySelector(".toolbar");
@@ -2294,17 +2175,17 @@ import {
         toolsModal.classList.add("hidden");
       }
     });
-    
+
     // Close modal when a tool button is clicked (improved UX)
-    toolsModal.querySelectorAll('.tool-item').forEach(btn => {
-        btn.addEventListener('click', () => {
-            // Optional: Don't close for toggles if we want to toggle multiple times
-            // But for now, let's close it to emulate a menu
-            // Exception: maybe theme toggle?
-            if (!btn.id.includes('toggle')) {
-                 toolsModal.classList.add("hidden");
-            }
-        });
+    toolsModal.querySelectorAll(".tool-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        // Optional: Don't close for toggles if we want to toggle multiple times
+        // But for now, let's close it to emulate a menu
+        // Exception: maybe theme toggle?
+        if (!btn.id.includes("toggle")) {
+          toolsModal.classList.add("hidden");
+        }
+      });
     });
   }
 
