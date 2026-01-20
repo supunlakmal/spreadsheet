@@ -1710,6 +1710,9 @@ import {
     // Load any existing state from URL
     loadStateFromURL();
 
+    // Recalculate after loading initial state
+    recalculateFormulas();
+
     // Render the grid
     renderGrid();
 
@@ -1724,6 +1727,7 @@ import {
       decryptAndDecode: URLManager.decryptAndDecode,
       onDecryptSuccess: (state) => {
         applyLoadedState(state);
+        recalculateFormulas(); // Recalculate after decryption
         renderGrid();
         DependencyTracer.init();
         scheduleDependencyDraw();
