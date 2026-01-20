@@ -62,6 +62,10 @@ function getPeerConstructor() {
   return window.Peer || null;
 }
 
+// UI state variables
+let p2pUI = null;
+let remoteCursorClass = "remote-active";
+
 export const P2PManager = {
   peer: null,
   conn: null,
@@ -71,6 +75,53 @@ export const P2PManager = {
 
   init(callbacks = {}) {
     this.callbacks = { ...defaultCallbacks, ...callbacks };
+    // Store UI references if provided
+    if (callbacks.p2pUI) {
+      p2pUI = callbacks.p2pUI;
+    }
+    if (callbacks.remoteCursorClass) {
+      remoteCursorClass = callbacks.remoteCursorClass;
+    }
+  },
+
+  /**
+   * Set P2P status message in UI
+   * @param {string} message - Status message to display
+   */
+  setStatus(message) {
+    if (p2pUI && p2pUI.statusEl) {
+      p2pUI.statusEl.textContent = message;
+    }
+  },
+
+  /**
+   * Reset P2P controls to initial state
+   */
+  resetControls() {
+    if (!p2pUI) return;
+
+    if (p2pUI.startHostBtn) {
+      p2pUI.startHostBtn.disabled = false;
+      if (p2pUI.startHostLabel) {
+        p2pUI.startHostBtn.innerHTML = p2pUI.startHostLabel;
+      }
+    }
+    if (p2pUI.joinBtn) {
+      p2pUI.joinBtn.disabled = false;
+      if (p2pUI.joinLabel) {
+        p2pUI.joinBtn.innerHTML = p2pUI.joinLabel;
+      }
+    }
+    if (p2pUI.idDisplay) {
+      p2pUI.idDisplay.classList.add("hidden");
+    }
+  },
+
+  /**
+   * Clear remote cursor highlighting from all cells
+   */
+  clearRemoteCursor() {
+    document.querySelectorAll(`.${remoteCursorClass}`).forEach((el) => el.classList.remove(remoteCursorClass));
   },
 
   canSend() {

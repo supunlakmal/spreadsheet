@@ -16,6 +16,7 @@ import { ThemeManager } from "./modules/themeManager.js";
 import { UIModeManager } from "./modules/uiModeManager.js";
 import { QRCodeManager } from "./modules/qrCodeManager.js";
 import { CellFormattingManager } from "./modules/cellFormattingManager.js";
+import { SelectionStatusManager } from "./modules/selectionStatusManager.js";
 import {
   addColumn,
   addRow,
@@ -242,15 +243,6 @@ import {
 
   // Normalization functions moved to modules/urlManager.js
 
-  function extractPlainText(value) {
-    if (value === null || value === undefined) return "";
-    // Use DOMParser for safe HTML parsing (doesn't execute scripts)
-    const parser = new DOMParser();
-    const doc = parser.parseFromString("<body>" + String(value) + "</body>", "text/html");
-    const text = doc.body.textContent || "";
-    return text.replace(/\u00a0/g, " ");
-  }
-
   function getDataArray() {
     return data;
   }
@@ -273,78 +265,6 @@ import {
 
   function setCellStylesArray(newCellStyles) {
     cellStyles = newCellStyles;
-  }
-
-  function formatStatNumber(value) {
-    return Number.isInteger(value) ? value : value.toFixed(2);
-  }
-
-  // Calculate and render selection summary stats
-  function updateSelectionStatusBar(boundsOverride = null) {
-    const bar = document.getElementById("selection-status");
-    const countEl = document.getElementById("stat-count");
-    const sumEl = document.getElementById("stat-sum");
-    const avgEl = document.getElementById("stat-avg");
-    const sumWrapper = sumEl ? sumEl.parentElement : null;
-    const avgWrapper = avgEl ? avgEl.parentElement : null;
-
-    if (!bar || !countEl || !sumEl || !avgEl) return;
-    if (isEmbedMode) {
-      bar.classList.remove("active");
-      return;
-    }
-
-    const bounds = boundsOverride || getSelectionBounds();
-    if (!bounds) {
-      bar.classList.remove("active");
-      return;
-    }
-
-    const selectedCellCount = (bounds.maxRow - bounds.minRow + 1) * (bounds.maxCol - bounds.minCol + 1);
-    if (selectedCellCount < 2) {
-      bar.classList.remove("active");
-      return;
-    }
-
-    let sum = 0;
-    let countNumeric = 0;
-    let countTotal = 0;
-
-    for (let r = bounds.minRow; r <= bounds.maxRow; r++) {
-      for (let c = bounds.minCol; c <= bounds.maxCol; c++) {
-        const raw = data[r] && data[r][c] !== undefined ? data[r][c] : "";
-        const text = extractPlainText(raw).trim();
-        if (!text) continue;
-
-        countTotal++;
-        const cleaned = text.replace(/[^0-9.-]+/g, "");
-        const numeric = cleaned && cleaned !== "-" && cleaned !== "." && cleaned !== "-." ? parseFloat(cleaned) : NaN;
-
-        if (!isNaN(numeric)) {
-          sum += numeric;
-          countNumeric++;
-        }
-      }
-    }
-
-    if (countTotal === 0) {
-      bar.classList.remove("active");
-      return;
-    }
-
-    countEl.innerText = countTotal;
-
-    if (countNumeric > 0) {
-      sumEl.innerText = formatStatNumber(sum);
-      avgEl.innerText = (sum / countNumeric).toFixed(2);
-      if (sumWrapper) sumWrapper.style.display = "inline";
-      if (avgWrapper) avgWrapper.style.display = "inline";
-    } else {
-      if (sumWrapper) sumWrapper.style.display = "none";
-      if (avgWrapper) avgWrapper.style.display = "none";
-    }
-
-    bar.classList.add("active");
   }
 
   // Helper functions moved to modules/urlManager.js
@@ -488,7 +408,7 @@ import {
       if (canBroadcastP2P()) {
         P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
       }
-      updateSelectionStatusBar();
+      SelectionStatusManager.updateStatusBar();
       if (previousFormula !== formulas[row][col]) {
         scheduleDependencyDraw();
       }
@@ -573,7 +493,7 @@ import {
         // Recalculate all dependent formulas
         recalculateFormulas();
         debouncedUpdateURL();
-        updateSelectionStatusBar();
+        SelectionStatusManager.updateStatusBar();
         if (canBroadcastP2P()) {
           P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
         }
@@ -602,30 +522,6 @@ import {
   }
 
   // ========== P2P Collaboration ==========
-
-  function setP2PStatus(message) {
-    if (p2pUI.statusEl) {
-      p2pUI.statusEl.textContent = message;
-    }
-  }
-
-  function resetP2PControls() {
-    if (p2pUI.startHostBtn) {
-      p2pUI.startHostBtn.disabled = false;
-      if (p2pUI.startHostLabel) {
-        p2pUI.startHostBtn.innerHTML = p2pUI.startHostLabel;
-      }
-    }
-    if (p2pUI.joinBtn) {
-      p2pUI.joinBtn.disabled = false;
-      if (p2pUI.joinLabel) {
-        p2pUI.joinBtn.innerHTML = p2pUI.joinLabel;
-      }
-    }
-    if (p2pUI.idDisplay) {
-      p2pUI.idDisplay.classList.add("hidden");
-    }
-  }
 
   function canBroadcastP2P() {
     if (isRemoteUpdate) return false;
@@ -656,22 +552,18 @@ import {
     scheduleDependencyDraw();
   }
 
-  function clearRemoteCursor() {
-    document.querySelectorAll(`.${REMOTE_CURSOR_CLASS}`).forEach((el) => el.classList.remove(REMOTE_CURSOR_CLASS));
-  }
-
   function handleP2PConnection(amIHost) {
     hasInitialSync = amIHost;
     if (amIHost) {
       recalculateFormulas();
       const fullState = buildCurrentState();
       P2PManager.sendInitialSync(fullState);
-      setP2PStatus("Connected. You can now edit together.");
+      P2PManager.setStatus("Connected. You can now edit together.");
       if (p2pUI.modal) {
         p2pUI.modal.classList.add("hidden");
       }
     } else {
-      setP2PStatus("Connected. Waiting for host data...");
+      P2PManager.setStatus("Connected. Waiting for host data...");
       showToast("Waiting for host data...", "info");
     }
   }
@@ -684,12 +576,12 @@ import {
     DependencyTracer.init();
     recalculateFormulas();
     debouncedUpdateURL();
-    updateSelectionStatusBar();
+    SelectionStatusManager.updateStatusBar();
     scheduleDependencyDraw();
-    clearRemoteCursor();
+    P2PManager.clearRemoteCursor();
     isRemoteUpdate = false;
     hasInitialSync = true;
-    setP2PStatus("Synced with host.");
+    P2PManager.setStatus("Synced with host.");
     if (p2pUI.modal) {
       p2pUI.modal.classList.add("hidden");
     }
@@ -746,7 +638,7 @@ import {
     const { rows, cols } = getState();
     if (rowIndex < 0 || colIndex < 0 || rowIndex >= rows || colIndex >= cols) return;
 
-    clearRemoteCursor();
+    P2PManager.clearRemoteCursor();
     const cell = getCellElement(rowIndex, colIndex);
     if (cell) {
       cell.classList.add(REMOTE_CURSOR_CLASS);
@@ -761,9 +653,9 @@ import {
 
   function handleP2PDisconnect() {
     hasInitialSync = false;
-    clearRemoteCursor();
-    resetP2PControls();
-    setP2PStatus("Disconnected.");
+    P2PManager.clearRemoteCursor();
+    P2PManager.resetControls();
+    P2PManager.setStatus("Disconnected.");
     showToast("Peer disconnected", "warning");
   }
 
@@ -1163,7 +1055,7 @@ import {
       buildRangeRef,
       insertTextAtCursor,
       FormulaDropdownManager,
-      onSelectionChange: updateSelectionStatusBar,
+      onSelectionChange: (bounds) => SelectionStatusManager.updateStatusBar(bounds),
       onGridResize: handleGridResize,
       onFormulaChange: scheduleDependencyDraw,
     });
@@ -1179,7 +1071,7 @@ import {
       recalculateFormulas,
       debouncedUpdateURL,
       showToast,
-      extractPlainText,
+      extractPlainText: SelectionStatusManager.extractPlainText,
       onImport: () => {
         scheduleFullSync();
         refreshDependencyLayer();
@@ -1196,6 +1088,8 @@ import {
     });
 
     P2PManager.init({
+      p2pUI,
+      remoteCursorClass: REMOTE_CURSOR_CLASS,
       onHostReady: (id) => {
         if (p2pUI.myIdInput) {
           p2pUI.myIdInput.value = id;
@@ -1203,7 +1097,7 @@ import {
         if (p2pUI.idDisplay) {
           p2pUI.idDisplay.classList.remove("hidden");
         }
-        setP2PStatus("Waiting for connection...");
+        P2PManager.setStatus("Waiting for connection...");
       },
       onConnectionOpened: handleP2PConnection,
       onInitialSync: handleInitialSync,
@@ -1212,8 +1106,8 @@ import {
       onSyncRequest: handleSyncRequest,
       onConnectionClosed: handleP2PDisconnect,
       onConnectionError: () => {
-        resetP2PControls();
-        setP2PStatus("Connection error.");
+        P2PManager.resetControls();
+        P2PManager.setStatus("Connection error.");
       },
     });
 
@@ -1266,6 +1160,13 @@ import {
       createEmptyCellStyle,
       canBroadcastP2P,
       P2PManager,
+    });
+
+    // Initialize Selection Status Manager
+    SelectionStatusManager.init({
+      getSelectionBounds,
+      getDataArray,
+      getEmbedModeFlag: () => isEmbedMode,
     });
 
     // Load theme preference first (before any rendering)
@@ -1323,7 +1224,7 @@ import {
       container.addEventListener("mouseleave", handleMouseLeave);
       container.addEventListener("mouseup", handleMouseUp);
       container.addEventListener("keydown", handleSelectionKeyDown);
-      container.addEventListener("keyup", () => updateSelectionStatusBar());
+      container.addEventListener("keyup", () => SelectionStatusManager.updateStatusBar());
 
       // Touch events for mobile selection
       container.addEventListener("touchstart", handleTouchStart, { passive: false });
