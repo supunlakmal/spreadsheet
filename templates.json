@@ -665,7 +665,7 @@
     "data": {
       "r": 15,
       "c": 6,
-      "t": "light",
+      "t": "dark",
       "d": [
         [0, 0, "Product"],
         [0, 1, "Unit Price"],
@@ -895,6 +895,733 @@
         ]
       ],
       "w": [150, 192, 150, 156, 179, 120, 120]
+    }
+  },
+  {
+    "id": "invoice-gen",
+    "name": "Professional Invoice",
+    "icon": "fa-file-invoice-dollar",
+    "description": "Calculate item totals, 15% VAT, and grand total.",
+    "data": {
+      "r": 10,
+      "c": 5,
+      "t": "dark",
+      "d": [
+        [0, 0, "Item Description"],
+        [0, 1, "Price"],
+        [0, 2, "Qty"],
+        [0, 3, "Total"],
+        [1, 0, "Web Design"],
+        [1, 1, "1200"],
+        [1, 2, "1"],
+        [1, 3, "1200"],
+        [2, 0, "Hosting (Annual)"],
+        [2, 1, "150"],
+        [2, 2, "2"],
+        [2, 3, "300"],
+        [3, 0, "SEO Audit"],
+        [3, 1, "500"],
+        [3, 2, "1"],
+        [3, 3, "500"],
+        [5, 2, "Subtotal"],
+        [5, 3, "2000"],
+        [6, 2, "Tax (15%)"],
+        [6, 3, "300"],
+        [7, 2, "GRAND TOTAL"],
+        [7, 3, "2300"]
+      ],
+      "f": [
+        [1, 3, "=B2*C2"],
+        [2, 3, "=B3*C3"],
+        [3, 3, "=B4*C4"],
+        [5, 3, "=SUM(D2:D4)"],
+        [6, 3, "=D6*0.15"],
+        [7, 3, "=D6+D7"]
+      ],
+      "s": [
+        [
+          0,
+          0,
+          {
+            "b": "#1e293b",
+            "c": "#ffffff"
+          }
+        ],
+        [
+          0,
+          3,
+          {
+            "a": "right",
+            "b": "#1e293b",
+            "c": "#ffffff"
+          }
+        ],
+        [
+          7,
+          2,
+          {
+            "b": "#2563eb",
+            "c": "#ffffff"
+          }
+        ],
+        [
+          7,
+          3,
+          {
+            "a": "right",
+            "b": "#2563eb",
+            "c": "#ffffff"
+          }
+        ]
+      ],
+      "w": [200, 100, 108, 120, 100]
+    }
+  },
+  {
+    "id": "stock-tracker",
+    "name": "Stock Portfolio",
+    "icon": "fa-chart-pie",
+    "description": "Track gains/losses using Price * Quantity minus Cost.",
+    "data": {
+      "r": 10,
+      "c": 6,
+      "t": "dark",
+      "d": [
+        [0, 0, "Ticker"],
+        [0, 1, "Shares"],
+        [0, 2, "Buy Price"],
+        [0, 3, "Current Price"],
+        [0, 4, "Profit/Loss"],
+        [1, 0, "AAPL"],
+        [1, 1, "10"],
+        [1, 2, "150"],
+        [1, 3, "190"],
+        [2, 0, "TSLA"],
+        [2, 1, "5"],
+        [2, 2, "240"],
+        [2, 3, "210"],
+        [3, 0, "GOOGL"],
+        [3, 1, "15"],
+        [3, 2, "130"],
+        [3, 3, "145"],
+        [5, 3, "TOTAL GAIN"],
+        [6, 3, "AVG GAIN %"]
+      ],
+      "f": [
+        [1, 4, "=(D2-C2)*B2"],
+        [2, 4, "=(D3-C3)*B3"],
+        [3, 4, "=(D4-C4)*B4"],
+        [5, 4, "=SUM(E2:E4)"],
+        [6, 4, "=AVG(E2:E4)/1000"]
+      ],
+      "s": [
+        [0, 4, { "a": "right", "c": "#4ade80" }],
+        [5, 4, { "b": "#166534", "z": "14" }]
+      ],
+      "w": [100, 80, 100, 100, 150]
+    }
+  },
+  {
+    "id": "payroll-calc",
+    "name": "Weekly Payroll",
+    "icon": "fa-users-gear",
+    "description": "Calculate staff wages and total company outlay.",
+    "data": {
+      "r": 10,
+      "c": 5,
+      "t": "dark",
+      "d": [
+        [0, 0, "Employee"],
+        [0, 1, "Hourly Rate"],
+        [0, 2, "Hours Worked"],
+        [0, 3, "Gross Pay"],
+        [1, 0, "Alice"],
+        [1, 1, "45"],
+        [1, 2, "40"],
+        [1, 3, "1800"],
+        [2, 0, "Bob"],
+        [2, 1, "30"],
+        [2, 2, "35"],
+        [2, 3, "1050"],
+        [3, 0, "Charlie"],
+        [3, 1, "50"],
+        [3, 2, "20"],
+        [3, 3, "1000"],
+        [5, 2, "TOTAL PAYROLL"],
+        [5, 3, "3850"],
+        [6, 2, "AVERAGE WAGE"],
+        [6, 3, "1283.3333333333"]
+      ],
+      "f": [
+        [1, 3, "=B2*C2"],
+        [2, 3, "=B3*C3"],
+        [3, 3, "=B4*C4"],
+        [5, 3, "=SUM(D2:D4)"],
+        [6, 3, "=AVG(D2:D4)"]
+      ],
+      "s": [
+        [
+          0,
+          0,
+          {
+            "b": "#f59e0b",
+            "c": "#ffffff"
+          }
+        ],
+        [
+          5,
+          3,
+          {
+            "b": "#000000",
+            "c": "#ffffff"
+          }
+        ]
+      ],
+      "w": [100, 100, 153, 145, 100]
+    }
+  },
+  {
+    "id": "fitness-tracker",
+    "name": "Weight Loss Log",
+    "icon": "fa-weight-scale",
+    "description": "Monitor weekly progress and average weight changes.",
+    "data": {
+      "r": 10,
+      "c": 4,
+      "t": "dark",
+      "d": [
+        [0, 0, "Week"],
+        [0, 1, "Weight (kg)"],
+        [0, 2, "Loss (-) / Gain (+)"],
+        [1, 0, "Week 1"],
+        [1, 1, "95"],
+        [1, 2, "0"],
+        [2, 0, "Week 2"],
+        [2, 1, "93.5"],
+        [2, 2, "-1.5"],
+        [3, 0, "Week 3"],
+        [3, 1, "92"],
+        [3, 2, "-1.5"],
+        [4, 0, "Week 4"],
+        [4, 1, "91.2"],
+        [4, 2, "-0.8"],
+        [6, 0, "AVERAGE WEIGHT"],
+        [6, 1, "92.925"],
+        [7, 0, "TOTAL LOSS"],
+        [7, 1, "3.8"]
+      ],
+      "f": [
+        [2, 2, "=B3-B2"],
+        [3, 2, "=B4-B3"],
+        [4, 2, "=B5-B4"],
+        [6, 1, "=AVG(B2:B5)"],
+        [7, 1, "=B2-B5"]
+      ],
+      "s": [
+        [
+          0,
+          0,
+          {
+            "b": "#065f46",
+            "c": "#ffffff"
+          }
+        ],
+        [
+          7,
+          1,
+          {
+            "c": "#ef4444",
+            "z": "16"
+          }
+        ]
+      ],
+      "w": [139, 124, 140, 100]
+    }
+  },
+  {
+    "id": "project-budget",
+    "name": "Project Spending",
+    "icon": "fa-briefcase",
+    "description": "Calculate budget variance and total project cost.",
+    "data": {
+      "r": 10,
+      "c": 5,
+      "t": "dark",
+      "d": [
+        [0, 0, "Task"],
+        [0, 1, "Budgeted"],
+        [0, 2, "Actual"],
+        [0, 3, "Variance"],
+        [1, 0, "Design"],
+        [1, 1, "2000"],
+        [1, 2, "2200"],
+        [2, 0, "Development"],
+        [2, 1, "5000"],
+        [2, 2, "4800"],
+        [3, 0, "Marketing"],
+        [3, 1, "1500"],
+        [3, 2, "1500"],
+        [5, 0, "TOTALS"],
+        [6, 0, "OVER/UNDER"]
+      ],
+      "f": [
+        [1, 3, "=B2-C2"],
+        [2, 3, "=B3-C3"],
+        [3, 3, "=B4-C4"],
+        [5, 1, "=SUM(B2:B4)"],
+        [5, 2, "=SUM(C2:C4)"],
+        [6, 1, "=B6-C6"]
+      ],
+      "s": [
+        [1, 3, { "c": "#f87171" }],
+        [2, 3, { "c": "#4ade80" }],
+        [6, 1, { "b": "#3b82f6" }]
+      ]
+    }
+  },
+  {
+    "id": "menu-costing",
+    "name": "Recipe Profitability",
+    "icon": "fa-utensils",
+    "description": "Calculate margins per dish: Sale Price - Cost.",
+    "data": {
+      "r": 8,
+      "c": 5,
+      "t": "dark",
+      "d": [
+        [0, 0, "Dish Name"],
+        [0, 1, "Ingredient Cost"],
+        [0, 2, "Sale Price"],
+        [0, 3, "Profit"],
+        [1, 0, "Burger"],
+        [1, 1, "4.50"],
+        [1, 2, "15.00"],
+        [1, 3, "10.5"],
+        [2, 0, "Pasta"],
+        [2, 1, "3.00"],
+        [2, 2, "12.50"],
+        [2, 3, "9.5"],
+        [3, 0, "Steak"],
+        [3, 1, "12.00"],
+        [3, 2, "35.00"],
+        [3, 3, "23"],
+        [5, 2, "AVG PROFIT PER DISH"],
+        [5, 3, "14.3333333333"]
+      ],
+      "f": [
+        [1, 3, "=C2-B2"],
+        [2, 3, "=C3-B3"],
+        [3, 3, "=C4-B4"],
+        [5, 3, "=AVG(D2:D4)"]
+      ],
+      "s": [
+        [
+          0,
+          3,
+          {
+            "b": "#ecfdf5",
+            "c": "#059669"
+          }
+        ],
+        [
+          5,
+          3,
+          {
+            "b": "#059669",
+            "c": "#fff",
+            "z": "14"
+          }
+        ]
+      ],
+      "w": [100, 128, 168, 134, 100]
+    }
+  },
+  {
+    "id": "loan-calc",
+    "name": "Loan Payment",
+    "icon": "fa-hand-holding-dollar",
+    "description": "Calculate simple interest and monthly payments.",
+    "data": {
+      "r": 10,
+      "c": 3,
+      "t": "dark",
+      "d": [
+        [0, 0, "Principal Amount"],
+        [0, 1, "5000"],
+        [1, 0, "Interest Rate (Annual %)"],
+        [1, 1, "0.05"],
+        [2, 0, "Term (Years)"],
+        [2, 1, "3"],
+        [4, 0, "Total Interest"],
+        [5, 0, "Total Repayment"],
+        [6, 0, "Monthly Installment"]
+      ],
+      "f": [
+        [4, 1, "=B1*B2*B3"],
+        [5, 1, "=B1+B5"],
+        [6, 1, "=B6/(B3*12)"]
+      ],
+      "s": [
+        [6, 0, { "b": "#ef4444", "c": "#fff" }],
+        [6, 1, { "b": "#ef4444", "c": "#fff", "z": "16" }]
+      ],
+      "w": [250, 150]
+    }
+  },
+  {
+    "id": "event-budget",
+    "name": "Event Planner",
+    "icon": "fa-calendar-check",
+    "description": "Calculate catering costs based on confirmed guests.",
+    "data": {
+      "r": 10,
+      "c": 4,
+      "t": "dark",
+      "d": [
+        [0, 0, "Guest Name"],
+        [0, 1, "Status"],
+        [0, 2, "Confirmed (1/0)"],
+        [1, 0, "John +1"],
+        [1, 1, "Confirmed"],
+        [1, 2, "2"],
+        [2, 0, "Sarah"],
+        [2, 1, "Confirmed"],
+        [2, 2, "1"],
+        [3, 0, "Mike"],
+        [3, 1, "Pending"],
+        [3, 2, "0"],
+        [5, 0, "Cost Per Head"],
+        [5, 1, "25"],
+        [7, 0, "TOTAL GUESTS"],
+        [8, 0, "TOTAL COST"]
+      ],
+      "f": [
+        [7, 1, "=SUM(C2:C4)"],
+        [8, 1, "=B8*B6"]
+      ],
+      "s": [
+        [8, 0, { "b": "#7c3aed", "c": "#fff" }],
+        [8, 1, { "b": "#7c3aed", "c": "#fff" }]
+      ],
+      "w": [150, 120, 120]
+    }
+  },
+  {
+    "id": "daily-sales",
+    "name": "Daily Revenue",
+    "icon": "fa-cash-register",
+    "description": "Daily income tracker with weekly sums and averages.",
+    "data": {
+      "r": 12,
+      "c": 3,
+      "t": "dark",
+      "d": [
+        [0, 0, "Day"],
+        [0, 1, "Revenue"],
+        [1, 0, "Monday"],
+        [1, 1, "450"],
+        [2, 0, "Tuesday"],
+        [2, 1, "380"],
+        [3, 0, "Wednesday"],
+        [3, 1, "520"],
+        [4, 0, "Thursday"],
+        [4, 1, "490"],
+        [5, 0, "Friday"],
+        [5, 1, "600"],
+        [7, 0, "WEEKLY TOTAL"],
+        [7, 1, "2440"],
+        [8, 0, "DAILY AVERAGE"],
+        [8, 1, "488"]
+      ],
+      "f": [
+        [7, 1, "=SUM(B2:B6)"],
+        [8, 1, "=AVG(B2:B6)"]
+      ],
+      "s": [
+        [
+          7,
+          1,
+          {
+            "b": "#22c55e",
+            "z": "14"
+          }
+        ],
+        [
+          8,
+          1,
+          {
+            "c": "#60a5fa"
+          }
+        ]
+      ],
+      "w": [145, 100, 100]
+    }
+  },
+  {
+    "id": "temp-converter",
+    "name": "Temperature Converter",
+    "icon": "fa-temperature-half",
+    "description": "Convert between Celsius, Fahrenheit, and Kelvin instantly.",
+    "data": {
+      "r": 8,
+      "c": 3,
+      "t": "light",
+      "d": [
+        [0, 0, "Input Value"],
+        [0, 1, "Unit"],
+        [0, 2, "Converted Results"],
+        [1, 0, "25"],
+        [1, 1, "Celsius (C)"],
+        [3, 1, "Fahrenheit (F)"],
+        [4, 1, "Kelvin (K)"],
+        [6, 0, "Formula Used:"],
+        [6, 1, "F = (C * 1.8) + 32"]
+      ],
+      "f": [
+        [3, 2, "=(A2*1.8)+32"],
+        [4, 2, "=A2+273.15"]
+      ],
+      "s": [
+        [0, 0, { "b": "#ef4444", "c": "#fff" }],
+        [3, 2, { "b": "#fee2e2", "z": "14", "a": "center" }],
+        [4, 2, { "b": "#fee2e2", "z": "14", "a": "center" }]
+      ],
+      "w": [150, 150, 200]
+    }
+  },
+  {
+    "id": "length-converter",
+    "name": "Length & Distance",
+    "icon": "fa-ruler-horizontal",
+    "description": "Metric to Imperial: Meters to Feet, Kilometers to Miles.",
+    "data": {
+      "r": 10,
+      "c": 4,
+      "t": "dark",
+      "d": [
+        [0, 0, "Metric Unit"],
+        [0, 1, "Value"],
+        [0, 2, "Imperial Unit"],
+        [0, 3, "Result"],
+        [1, 0, "Meters (m)"],
+        [1, 1, "10"],
+        [1, 2, "Feet (ft)"],
+        [1, 3, "32.8084"],
+        [2, 0, "Kilometers (km)"],
+        [2, 1, "5"],
+        [2, 2, "Miles (mi)"],
+        [2, 3, "3.106855"],
+        [3, 0, "Centimeters (cm)"],
+        [3, 1, "100"],
+        [3, 2, "Inches (in)"],
+        [3, 3, "39.3701"],
+        [5, 0, "Quick Info:"],
+        [5, 1, "1 km = 0.621 mi"]
+      ],
+      "f": [
+        [1, 3, "=B2*3.28084"],
+        [2, 3, "=B3*0.621371"],
+        [3, 3, "=B4*0.393701"]
+      ],
+      "s": [
+        [
+          0,
+          0,
+          {
+            "b": "#3b82f6",
+            "c": "#fff"
+          }
+        ],
+        [
+          1,
+          3,
+          {
+            "a": "right",
+            "c": "#60a5fa"
+          }
+        ],
+        [
+          2,
+          3,
+          {
+            "a": "right",
+            "c": "#60a5fa"
+          }
+        ],
+        [
+          3,
+          3,
+          {
+            "a": "right",
+            "c": "#60a5fa"
+          }
+        ]
+      ],
+      "w": [150, 111, 150, 120]
+    }
+  },
+  {
+    "id": "weight-converter",
+    "name": "Weight Converter",
+    "icon": "fa-weight-hanging",
+    "description": "Convert weight for gym (kg/lb) or kitchen (g/oz).",
+    "data": {
+      "r": 8,
+      "c": 4,
+      "t": "light",
+      "d": [
+        [0, 0, "KG Value"],
+        [0, 1, "Pounds (lb)"],
+        [0, 2, "Gram Value"],
+        [0, 3, "Ounces (oz)"],
+        [1, 0, "75"],
+        [1, 1, "165.3465"],
+        [1, 2, "500"],
+        [1, 3, "17.637"],
+        [3, 0, "Add Value in White Cells"]
+      ],
+      "f": [
+        [1, 1, "=A2*2.20462"],
+        [1, 3, "=C2*0.035274"]
+      ],
+      "s": [
+        [
+          0,
+          0,
+          {
+            "b": "#8b5cf6",
+            "c": "#fff"
+          }
+        ],
+        [
+          0,
+          2,
+          {
+            "b": "#d946ef",
+            "c": "#fff"
+          }
+        ],
+        [
+          1,
+          1,
+          {
+            "a": "center",
+            "b": "#f5f3ff",
+            "z": "14"
+          }
+        ],
+        [
+          1,
+          3,
+          {
+            "a": "center",
+            "b": "#fdf4ff",
+            "z": "14"
+          }
+        ]
+      ],
+      "w": [170, 120, 120, 120]
+    }
+  },
+  {
+    "id": "currency-converter",
+    "name": "Currency Tool",
+    "icon": "fa-money-bill-transfer",
+    "description": "Set a custom exchange rate to convert list of prices.",
+    "data": {
+      "r": 12,
+      "c": 4,
+      "t": "light",
+      "d": [
+        [0, 0, "EXCHANGE RATE (1 USD to EUR)"],
+        [0, 2, "0.92"],
+        [2, 0, "Item Price (USD)"],
+        [2, 1, "Price (EUR)"],
+        [3, 0, "100"],
+        [3, 1, "92"],
+        [4, 0, "55.50"],
+        [4, 1, "51.06"],
+        [5, 0, "1200"],
+        [5, 1, "1104"],
+        [7, 0, "1355.5"],
+        [7, 1, "1247.06"]
+      ],
+      "f": [
+        [3, 1, "=A4*C1"],
+        [4, 1, "=A5*C1"],
+        [5, 1, "=A6*C1"],
+        [7, 0, "=SUM(A4:A6)"],
+        [7, 1, "=SUM(B4:B6)"]
+      ],
+      "s": [
+        [
+          0,
+          0,
+          {
+            "b": "#059669",
+            "c": "#fff"
+          }
+        ],
+        [
+          0,
+          2,
+          {
+            "a": "center",
+            "b": "#fbbf24",
+            "z": "14"
+          }
+        ],
+        [
+          7,
+          0,
+          {
+            "b": "#f1f5f9"
+          }
+        ],
+        [
+          7,
+          1,
+          {
+            "b": "#059669",
+            "c": "#fff"
+          }
+        ]
+      ],
+      "w": [236, 150, 80, 100]
+    }
+  },
+  {
+    "id": "time-converter",
+    "name": "Time Converter",
+    "icon": "fa-stopwatch",
+    "description": "Convert HH:MM format into total minutes or seconds.",
+    "data": {
+      "r": 8,
+      "c": 4,
+      "t": "light",
+      "d": [
+        [0, 0, "Hours"],
+        [0, 1, "Minutes"],
+        [0, 2, "Total Minutes"],
+        [0, 3, "Total Seconds"],
+        [1, 0, "2"],
+        [1, 1, "30"],
+        [3, 0, "Decimal Hours"],
+        [4, 0, "1.5"],
+        [4, 2, "Results in Minutes"]
+      ],
+      "f": [
+        [1, 2, "=(A2*60)+B2"],
+        [1, 3, "=C2*60"],
+        [4, 1, "=A5*60"]
+      ],
+      "s": [
+        [0, 0, { "b": "#334155", "c": "#fff" }],
+        [0, 1, { "b": "#334155", "c": "#fff" }],
+        [1, 2, { "b": "#f1f5f9", "z": "14" }],
+        [4, 1, { "b": "#f1f5f9", "z": "14" }]
+      ],
+      "w": [120, 120, 150, 150]
     }
   }
 ]
