@@ -13,6 +13,7 @@ export const TemplateManager = {
     this.closeBtn = document.getElementById("templates-close-btn");
     this.galleryContainer = document.getElementById("templates-gallery");
     this.openBtn = document.getElementById("open-templates-btn"); // Button in Tools modal
+    this.searchInput = document.getElementById("template-search-input");
   },
 
   bindEvents() {
@@ -26,6 +27,25 @@ export const TemplateManager = {
       this.modal.addEventListener("click", (e) => {
         if (e.target === this.modal) this.closeGallery();
       });
+    }
+    
+    // Check initial hash
+    this.checkHash();
+
+    // Listen for hash changes
+    window.addEventListener("hashchange", () => this.checkHash());
+
+    // Listen for search input
+    if (this.searchInput) {
+      this.searchInput.addEventListener("input", (e) => {
+        this.filterTemplates(e.target.value);
+      });
+    }
+  },
+
+  checkHash() {
+    if (window.location.hash === "#gallery") {
+      this.openGallery();
     }
   },
 
@@ -41,6 +61,11 @@ export const TemplateManager = {
   closeGallery() {
     if (this.modal) {
       this.modal.classList.add("hidden");
+      
+      // If closing and hash is #gallery, clear it
+      if (window.location.hash === "#gallery") {
+        history.pushState("", document.title, window.location.pathname + window.location.search);
+      }
     }
   },
 
@@ -57,14 +82,23 @@ export const TemplateManager = {
     }
   },
 
-  renderTemplates() {
+  renderTemplates(templatesToRender = null) {
     if (!this.galleryContainer) return;
     
+    const templates = templatesToRender || this.templates;
     this.galleryContainer.innerHTML = "";
+
+    if (templates.length === 0) {
+      this.galleryContainer.innerHTML = '<div class="no-results">No templates found matching your search.</div>';
+      return;
+    }
+
     const grid = document.createElement("div");
     grid.className = "templates-grid";
 
-    this.templates.forEach(template => {
+
+
+    templates.forEach(template => {
       const card = document.createElement("div");
       card.className = "template-card";
       
@@ -126,5 +160,21 @@ export const TemplateManager = {
     }
     
     // this.closeGallery(); // Kept open as requested
+  },
+
+  filterTemplates(query) {
+    if (!query) {
+      this.renderTemplates(this.templates);
+      return;
+    }
+
+    const lowerQuery = query.toLowerCase();
+    const filtered = this.templates.filter(template => {
+      const nameMatch = template.name.toLowerCase().includes(lowerQuery);
+      const descMatch = template.description && template.description.toLowerCase().includes(lowerQuery);
+      return nameMatch || descMatch;
+    });
+
+    this.renderTemplates(filtered);
   }
 };
