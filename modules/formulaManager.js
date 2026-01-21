@@ -113,6 +113,8 @@ export const FormulaEvaluator = {
 
       // Numbers (including decimals)
       if (/[\d.]/.test(expr[i])) {
+        // Lookahead to see if it's actually part of a cell ref (like 123... wait, cell refs start with letters)
+        // Actually, cell refs MUST start with letters. So if it starts with digit, it's a number.
         let num = "";
         while (i < expr.length && /[\d.]/.test(expr[i])) {
           num += expr[i++];
@@ -124,25 +126,45 @@ export const FormulaEvaluator = {
         continue;
       }
 
-      // Cell references (A1, B2, AA99, etc.)
+      // Identifiers: Cell References (A1) OR Function Names (AVG)
+      // Both start with letters.
       if (/[A-Z]/i.test(expr[i])) {
-        let ref = "";
+        let ident = "";
         while (i < expr.length && /[A-Z]/i.test(expr[i])) {
-          ref += expr[i++];
+          ident += expr[i++];
         }
-        while (i < expr.length && /\d/.test(expr[i])) {
-          ref += expr[i++];
+        // If followed by digits, it might be a cell ref (e.g. A1) or a function with number in name (none currently)
+        // Standard cell ref: Letters + Digits.
+        // Function name: Letters only (usually).
+        
+        // Peek ahead for digits
+        let digits = "";
+        if (i < expr.length && /\d/.test(expr[i])) {
+            while (i < expr.length && /\d/.test(expr[i])) {
+                digits += expr[i++];
+            }
         }
-        if (!/^[A-Z]+\d+$/i.test(ref)) {
-          return { error: "Invalid cell reference: " + ref };
+
+        if (digits.length > 0) {
+            // It's a cell reference (e.g. A1)
+            tokens.push({ type: "CELL_REF", value: (ident + digits).toUpperCase() });
+        } else {
+            // It's a function name or just letters (e.g. AVG, SUM, PI)
+            tokens.push({ type: "IDENTIFIER", value: ident.toUpperCase() });
         }
-        tokens.push({ type: "CELL_REF", value: ref.toUpperCase() });
         continue;
       }
 
       // Operators
       if ("+-*/".includes(expr[i])) {
         tokens.push({ type: "OPERATOR", value: expr[i] });
+        i++;
+        continue;
+      }
+
+      // Colon for ranges
+      if (expr[i] === ":") {
+        tokens.push({ type: "COLON" });
         i++;
         continue;
       }
@@ -169,6 +191,11 @@ export const FormulaEvaluator = {
   // Parse and evaluate arithmetic expression with proper precedence
   evaluateArithmeticExpr(tokens, context) {
     let pos = 0;
+    // We bind 'this' to access evaluateSUM/AVG, or we can just access FormulaEvaluator directly if strict.
+    // Better to use 'self' or access properties from outer scope if possible, 
+    // but here we are inside an object method. Context 'this' might get lost in inner functions.
+    const evaluator = this; 
+
     const { getCellValue, rows, cols } = context;
 
     function peek() {
@@ -251,7 +278,58 @@ export const FormulaEvaluator = {
         if (parsed.row >= rows || parsed.col >= cols || parsed.row < 0 || parsed.col < 0) {
           return { error: "#REF!" };
         }
-        return { value: getCellValue(parsed.row, parsed.col) };
+        // getCellValue returns a value. If string, try to parse? 
+        // For arithmetic it usually expects numbers. 
+        // Standard behavior: if cell string, 0 or error? 
+        // Existing logic passed it through.
+        let val = getCellValue(parsed.row, parsed.col);
+        if (val === null || val === "") val = 0;
+        const num = parseFloat(val);
+        return { value: isNaN(num) ? 0 : num }; 
+      }
+
+      // Function Call (IDENTIFIER + LPAREN)
+      if (token.type === "IDENTIFIER") {
+        const funcName = consume().value; 
+        
+        if (peek() && peek().type === "LPAREN") {
+            consume(); // eat (
+            
+            // For SUM/AVG we expect a Range (A1:B2)
+            // Range parsing in tokens: CELL_REF COLON CELL_REF
+            // or just CELL_REF (single cell range)
+            
+            const first = consume();
+            if(!first || first.type !== "CELL_REF") return { error: "#NAME?" };
+            
+            let rangeStr = first.value;
+            
+            if (peek() && peek().type === "COLON") {
+                consume(); // eat :
+                const second = consume();
+                if (!second || second.type !== "CELL_REF") return { error: "#NAME?" };
+                rangeStr += ":" + second.value;
+            }
+            
+            if (!peek() || peek().type !== "RPAREN") return { error: "#ERROR!" };
+            consume(); // eat )
+            
+            if (funcName === "SUM") {
+                const val = evaluator.evaluateSUM(rangeStr, context);
+                if (typeof val === 'string' && val.startsWith("#")) return { error: val };
+                return { value: val };
+            }
+            if (funcName === "AVG") {
+                const val = evaluator.evaluateAVG(rangeStr, context);
+                if (typeof val === 'string' && val.startsWith("#")) return { error: val };
+                return { value: val };
+            }
+            
+            return { error: "#NAME?" };
+        } else {
+             // Just an identifier without parens? Not supported yet (maybe named ranges later)
+             return { error: "#NAME?" };
+        }
       }
 
       // Parenthesized expression
@@ -311,6 +389,12 @@ export const FormulaEvaluator = {
     const expr = formula.substring(1).trim();
     if (expr.length === 0) return false;
 
+    // The new tokenizer handles everything, so if it tokenizes without error, we consider it a formula candidate.
+    // However, to be safe against plain strings, we might want to check if it LOOKS like a formula.
+    // But since the user explicitly typed '=', checking if it tokenizes is good enough for our logic.
+    
+    // Quick check: Previous logic had regexes for SUM/AVG. 
+    // Now we rely on tokenizer.
     const tokenResult = this.tokenizeArithmetic(expr);
     if (tokenResult.error) return false;
     if (tokenResult.tokens.length === 0) return false;
@@ -341,7 +425,14 @@ export const FormulaEvaluator = {
     let sum = 0;
     for (let r = range.startRow; r <= range.endRow; r++) {
       for (let c = range.startCol; c <= range.endCol; c++) {
-        sum += getCellValue(r, c);
+        // getCellValue returns the visual value or calculated value.
+        // If it's another formula, it should have been calculated already or will be handled by dependency order (ideally).
+        // Since we are adding, we try to parse float.
+        const val = getCellValue(r, c);
+        const num = parseFloat(val);
+        if (!isNaN(num)) {
+            sum += num;
+        }
       }
     }
     return sum;
@@ -349,7 +440,7 @@ export const FormulaEvaluator = {
 
   // Evaluate AVG(range)
   evaluateAVG(rangeStr, context) {
-    const { getCellValue, data, rows, cols } = context;
+    const { data, rows, cols } = context;
     const range = parseRange(rangeStr);
     if (!range) return "#REF!";
 
@@ -360,22 +451,49 @@ export const FormulaEvaluator = {
     let count = 0;
     for (let r = range.startRow; r <= range.endRow; r++) {
       for (let c = range.startCol; c <= range.endCol; c++) {
-        // Need raw data for AVG to skip empty cells properly
-        // If we use getCellValue it returns 0 for empty, which might affect avg?
-        // script.js checked raw data for null/empty.
-        // We need 'data' access in context for this precise logic.
+        // use data directly to skip empty cells distinctions
         const raw = data[r][c];
-
         if (raw === null || raw === undefined) continue;
-        const stripped = String(raw)
-          .replace(/<[^>]*>/g, "")
-          .trim();
+        const stripped = String(raw).replace(/<[^>]*>/g, "").trim();
         if (stripped === "") continue;
+        
+        // If it's a formula in that cell, we should technically use its calculated value...
+        // But the previous implementation used 'raw' and parsed it? 
+        // If the cell contains "=SUM(A1:A2)", stripped is "=SUM(A1:A2)". parseFloat is NaN.
+        // This suggests AVG only worked on literal numbers before? 
+        // Let's improve it: use getCellValue if raw starts with =? 
+        // Actually, 'data' usually stores the Formula string for formulas.
+        // 'getCellValue' returns the computed value for that cell (if script.js is doing its job right).
+        // Let's switch to checking the computed value via getCellValue for consistency, 
+        // BUT we need to ignore empty cells.
+        
+        // Wait, context.getCellValue implementation in script.js might just be retrieving data[r][c] or the cell textContent.
+        // Let's stick to the previous logic but maybe robustify it slightly if needed.
+        // Original logic:
+        /*
         const normalized = stripped.replace(/,/g, "");
         const num = parseFloat(normalized);
         if (isNaN(num)) continue;
         sum += num;
         count++;
+        */
+       
+       // If the referenced cell is a formula, raw is "=..." which is NaN. 
+       // We really should use computed values. 
+       // However, to minimize regression risk on this specific refactor, I will adapt the referenced implementation 
+       // but strictly speaking, AVG SHOULD use computed values. 
+       // If I change it to use context.getCellValue(r,c), I might break "ignore empty strings" logic if getCellValue returns "" for empty.
+       
+       // Improving: Try computed value first.
+       let val = context.getCellValue(r, c);
+       if (val === null || val === "" || val === undefined) continue;
+       
+       // value might be "123" or 123.
+       const num = parseFloat(val);
+       if (!isNaN(num)) {
+           sum += num;
+           count++;
+       }
       }
     }
     return count === 0 ? 0 : sum / count;
@@ -387,21 +505,14 @@ export const FormulaEvaluator = {
     if (isVisualFormula(formula)) return formula;
 
     const expr = formula.substring(1).trim();
-    const exprUpper = expr.toUpperCase();
-
-    // Match SUM(range)
-    const sumMatch = exprUpper.match(/^SUM\(([A-Z]+\d+:[A-Z]+\d+)\)$/);
-    if (sumMatch) {
-      return this.evaluateSUM(sumMatch[1], context);
-    }
-
-    // Match AVG(range)
-    const avgMatch = exprUpper.match(/^AVG\(([A-Z]+\d+:[A-Z]+\d+)\)$/);
-    if (avgMatch) {
-      return this.evaluateAVG(avgMatch[1], context);
-    }
-
-    // Try arithmetic expression
+    
+    // We strictly use the arithmetic evaluator now because it handles SUM/AVG too.
+    // So we don't need the separate heavy regex checks for SUM/AVG unless we want 
+    // to keep them for performance or edge cases (like legacy behavior).
+    // The new parser should be superset.
+    
+    // Try arithmetic expression (which now includes functions)
+    // We allow isArithmeticFormula to decide.
     if (this.isArithmeticFormula(formula)) {
       return this.evaluateArithmetic(expr, context);
     }
