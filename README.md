@@ -80,6 +80,19 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 - **CSV Export** - Download the current grid as `spreadsheet.csv`
 - **Formula-aware Import** - SUM/AVG formulas are preserved; unsupported formulas are imported as text
 
+### Templates Gallery
+
+- **Searchable Gallery** - Browse built-in templates loaded from `templates.json`
+- **One-click Launch** - "Use Template" opens a new tab with the template prefilled
+- **Pre-built Examples** - Todo lists, budgets, calculators, and trackers
+
+### Presentation Mode
+
+- **Row-based Slides** - Each non-empty row becomes a slide; first cell is the title
+- **Keyboard Navigation** - Arrow/Page/Space/Home/End keys move between slides
+- **Quick Exit** - Escape closes the presentation overlay
+- **Visual Formula Widgets** - `=PROGRESS()`, `=TAG()`, and `=RATING()` render as visuals
+
 ### Sharing & Access Control
 
 - **Copy Link** - One click to copy the compressed URL hash
