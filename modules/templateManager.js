@@ -1,4 +1,5 @@
 import { URLManager } from "./urlManager.js";
+import { ExcelManager } from "./excelManager.js";
 
 export const TemplateManager = {
   templates: [],
@@ -96,8 +97,6 @@ export const TemplateManager = {
     const grid = document.createElement("div");
     grid.className = "templates-grid";
 
-
-
     templates.forEach(template => {
       const card = document.createElement("div");
       card.className = "template-card";
@@ -105,8 +104,10 @@ export const TemplateManager = {
       const icon = template.icon || "fa-table";
       
       card.innerHTML = `
-        <div class="template-icon">
-          <i class="fa-solid ${icon}"></i>
+        <div class="template-header">
+           <div class="template-icon">
+              <i class="fa-solid ${icon}"></i>
+           </div>
         </div>
         <div class="template-info">
           <h3>${template.name}</h3>
@@ -114,19 +115,44 @@ export const TemplateManager = {
         </div>
         <div class="template-actions">
            <button class="use-template-btn" data-id="${template.id}">Use Template</button>
+           <button class="template-download-btn" title="Download Excel (.xlsx)" data-id="${template.id}">
+              <i class="fa-solid fa-file-excel"></i>
+              <span>Excel</span>
+           </button>
         </div>
       `;
 
-      // Handle click
-      const btn = card.querySelector(".use-template-btn");
-      btn.addEventListener("click", () => {
+      // Use Template button
+      card.querySelector(".use-template-btn").addEventListener("click", () => {
         this.useTemplate(template);
+      });
+
+      // Download Excel button
+      card.querySelector(".template-download-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.downloadTemplateAsExcel(template);
       });
 
       grid.appendChild(card);
     });
 
     this.galleryContainer.appendChild(grid);
+  },
+
+  async downloadTemplateAsExcel(template) {
+    if (!template || !template.data) return;
+
+    try {
+      // 1. Expand the minified state
+      const state = ExcelManager.expandMinifiedState(template.data);
+      if (!state) return;
+
+      // 2. Export
+      const filename = `${template.name.toLowerCase().replace(/\s+/g, "_")}_template.xlsx`;
+      await ExcelManager.exportFromState(state, filename);
+    } catch (error) {
+      console.error("Failed to download template as Excel:", error);
+    }
   },
 
   async useTemplate(template) {
@@ -158,8 +184,6 @@ export const TemplateManager = {
     } else {
        console.warn("Invalid template format:", template);
     }
-    
-    // this.closeGallery(); // Kept open as requested
   },
 
   filterTemplates(query) {

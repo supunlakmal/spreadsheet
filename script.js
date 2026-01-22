@@ -8,6 +8,7 @@ import { DependencyTracer } from "./modules/dependencyTracer.js";
 import { PasswordManager } from "./modules/passwordManager.js";
 import { CSVManager } from "./modules/csvManager.js";
 import { JSONManager } from "./modules/jsonManager.js";
+import { ExcelManager } from "./modules/excelManager.js";
 import { HashToolManager } from "./modules/hashToolManager.js";
 import { P2PManager } from "./modules/p2pManager.js";
 import { PresentationManager } from "./modules/presentationManager.js";
@@ -1086,6 +1087,15 @@ import {
     HashToolManager.init({
       showToast,
     });
+    ExcelManager.init({
+      getState,
+      getDataArray,
+      getFormulasArray,
+      getCellStylesArray,
+      recalculateFormulas,
+      showToast,
+      extractPlainText: SelectionStatusManager.extractPlainText,
+    });
 
     P2PManager.init({
       p2pUI,
@@ -1387,6 +1397,10 @@ import {
     }
     if (exportCsvBtn) {
       exportCsvBtn.addEventListener("click", () => CSVManager.downloadCSV());
+    }
+    const exportExcelBtn = document.getElementById("export-excel");
+    if (exportExcelBtn) {
+      exportExcelBtn.addEventListener("click", () => ExcelManager.downloadExcel());
     }
     if (presentBtn) {
       presentBtn.addEventListener("click", () => {

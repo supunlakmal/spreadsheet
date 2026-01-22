@@ -2234,16 +2234,23 @@ body.presentation-mode-active {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 20px;
     font-size: 1.75rem;
     color: var(--accent-color);
     transition: all 0.3s ease;
 }
 
+.template-header {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
 .template-card:hover .template-icon {
     background: var(--accent-color);
     color: white;
-    transform: scale(1.1) rotate(-5deg);
+    transform: scale(1.1);
 }
 
 .template-info {
@@ -2268,26 +2275,59 @@ body.presentation-mode-active {
 
 .template-actions {
     width: 100%;
+    display: flex;
+    gap: 10px;
+    align-items: center;
 }
 
 .use-template-btn {
-    width: 100%;
-    padding: 12px;
+    flex: 1;
+    padding: 10px 14px;
     border: none;
     border-radius: 8px;
-    background: var(--bg-primary);
-    color: var(--text-secondary);
+    background: var(--accent-color);
+    color: white;
     font-weight: 600;
+    font-size: 0.875rem;
     cursor: pointer;
     transition: all 0.2s;
-    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 4px rgba(74, 144, 217, 0.2);
 }
 
 .use-template-btn:hover {
-    background: var(--accent-color);
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(74, 144, 217, 0.3);
+}
+
+.template-download-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    background: #107c41; /* Excel Green */
     color: white;
-    border-color: var(--accent-color);
-    box-shadow: 0 4px 12px rgba(74, 144, 217, 0.2);
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.template-download-btn:hover {
+    background: #0d6334;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 124, 65, 0.3);
+}
+
+.template-download-btn i {
+    font-size: 0.9rem;
+}
+
+.template-download-btn span {
+    display: inline-block;
 }
 
 /* Loading State */
