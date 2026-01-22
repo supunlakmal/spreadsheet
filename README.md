@@ -364,6 +364,8 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 | Toggle read-only      | Click the pen/eye icon to switch between edit and view-only |
 | Generate embed code   | Click the `</>` button to copy an iframe snippet            |
 | Open raw JSON (AI)    | Click the file-code button to view/copy JSON                |
+| Open template gallery | Tools -> Template Gallery                                   |
+| Start presentation    | Tools -> Presentation Mode                                  |
 | Copy URL              | Click the copy button in the toolbar                        |
 | Open on mobile (QR)   | Click the QR button to show a scannable code                |
 | Enter formula         | Type `=` followed by function (e.g., `=SUM(A1:B5)`)         |
@@ -387,7 +389,10 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 | Arrow keys                       | Move selection (when not editing)                                                   |
 | Shift+Arrow                      | Extend selection                                                                    |
 | Enter                            | Evaluate formula and move down (or insert formula suggestion when dropdown is open) |
-| Escape                           | Clear selection / Close formula dropdown                                            |
+| Escape                           | Clear selection / Close formula dropdown / Exit presentation mode                   |
+| Space / PageDown / ArrowDown      | Next slide (presentation mode)                                                      |
+| PageUp / ArrowUp                  | Previous slide (presentation mode)                                                  |
+| Home / End                        | First/last slide (presentation mode)                                                |
 | Arrow Up/Down (formula dropdown) | Navigate suggestions                                                                |
 | Tab (formula dropdown)           | Insert active suggestion                                                            |
 
@@ -591,7 +596,14 @@ If `METERED_API_KEY` is not configured:
 
 ## Recent Updates
 
-### Latest - Visual Dependency Tracer + P2P Formula Sync
+### Latest - Template Gallery + Presentation Mode
+
+- Added a searchable Template Gallery with pre-built sheets from `templates.json`
+- One-click "Use Template" opens a new tab with the template prefilled
+- Added Presentation Mode to turn rows into slides with keyboard navigation
+- Presentation renders visual formulas: `=PROGRESS()`, `=TAG()`, and `=RATING()`
+
+### Recent - Visual Dependency Tracer + P2P Formula Sync
 
 - Added a Trace Logic overlay that renders formula dependencies with SVG curves
 - Auto redraws on edits, scroll, resize, and grid updates
