@@ -13,6 +13,7 @@ import { HashToolManager } from "./modules/hashToolManager.js";
 import { P2PManager } from "./modules/p2pManager.js";
 import { PresentationManager } from "./modules/presentationManager.js";
 import { TemplateManager } from "./modules/templateManager.js";
+import { ToolsMenuManager } from "./modules/toolsMenuManager.js";
 import { ThemeManager } from "./modules/themeManager.js";
 import { UIModeManager } from "./modules/uiModeManager.js";
 import { QRCodeManager } from "./modules/qrCodeManager.js";
@@ -1677,7 +1678,7 @@ import {
     updateScrollButtons();
   }
 
-  // Tools Modal Logic
+  // Tools Modal Logic with Dynamic Rendering
   const toolsMenuBtn = document.getElementById("tools-menu-btn");
   const toolsModal = document.getElementById("tools-modal");
   const toolsCloseBtn = document.getElementById("tools-close-btn");
@@ -1697,20 +1698,18 @@ import {
       }
     });
 
-    // Close modal when a tool button is clicked (improved UX)
-    toolsModal.querySelectorAll(".tool-item").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        // Optional: Don't close for toggles if we want to toggle multiple times
-        // But for now, let's close it to emulate a menu
-        // Exception: maybe theme toggle?
-        if (!btn.id.includes("toggle")) {
-          toolsModal.classList.add("hidden");
-        }
-      });
+    // Event delegation for dynamically rendered tool buttons
+    toolsModal.addEventListener("click", (e) => {
+      const toolItem = e.target.closest(".tool-item");
+      if (toolItem && !toolItem.id.includes("toggle")) {
+        // Close modal for non-toggle tools
+        toolsModal.classList.add("hidden");
+      }
     });
   }
 
   // Initialize all modules
   initToolbarScroll();
   TemplateManager.init();
+  ToolsMenuManager.init(); // Initialize tools menu from JSON
 })();

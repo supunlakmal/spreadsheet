@@ -2077,17 +2077,246 @@ body.presentation-mode-active {
     transition: all 0.2s;
 }
 
+
 .modal-icon-btn:hover {
     background: var(--bg-primary);
     color: var(--text-primary);
 }
 
-/* Responsive adjustments */
-@media (max-width: 600px) {
+/* ========== Tools Menu Search Bar ========== */
+.tools-search-container {
+    padding: 16px 20px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.tools-search-icon {
+    position: absolute;
+    left: 32px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.tools-search-input {
+    width: 100%;
+    padding: 12px 16px 12px 40px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.9rem;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.tools-search-input:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px var(--cell-focus-shadow);
+    background: var(--bg-secondary);
+}
+
+.tools-search-input::placeholder {
+    color: var(--text-muted);
+}
+
+/* ========== Tools Grid & Sections ========== */
+.tools-grid {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.tools-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.tools-section h4 {
+    margin: 0;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tools-section h4 i {
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+
+.tools-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* ========== Tool Item Cards ========== */
+.tool-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    text-align: left;
+    position: relative;
+    overflow: hidden;
+}
+
+.tool-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    background: var(--accent-color);
+    transform: scaleY(0);
+    transition: transform 0.2s ease;
+}
+
+.tool-item:hover {
+    background: var(--bg-cell-focus);
+    border-color: var(--accent-color);
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.tool-item:hover::before {
+    transform: scaleY(1);
+}
+
+.tool-item:active {
+    transform: translateX(2px);
+}
+
+.tool-item i {
+    font-size: 1.1rem;
+    width: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.tool-item:hover i {
+    color: var(--accent-color);
+    transform: scale(1.1);
+}
+
+/* ========== Empty State ========== */
+.tools-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.tools-empty-state.hidden {
+    display: none;
+}
+
+.tools-empty-state i {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    opacity: 0.4;
+}
+
+.tools-empty-state p {
+    margin: 0;
+    font-size: 1rem;
+}
+
+/* ========== Responsive Mobile Design ========== */
+@media (max-width: 768px) {
+    .tools-modal-content {
+        max-width: 95%;
+        max-height: 90vh;
+    }
+    
     .tools-grid {
         grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 16px;
+        max-height: 65vh;
+    }
+    
+    .tool-item {
+        min-height: 52px;
+        padding: 14px 16px;
+        font-size: 0.9375rem;
+    }
+    
+    .tool-item i {
+        font-size: 1.2rem;
+        width: 24px;
+    }
+    
+    .tools-search-container {
+        padding: 12px 16px;
+    }
+    
+    .tools-search-input {
+        padding: 14px 16px 14px 44px;
+        font-size: 1rem;
+    }
+    
+    .tools-search-icon {
+        left: 28px;
+        font-size: 1rem;
     }
 }
+
+@media (max-width: 480px) {
+    .tools-modal-content {
+        width: 100%;
+        max-width: 100%;
+        border-radius: 16px 16px 0 0;
+        max-height: 85vh;
+    }
+    
+    .tools-grid {
+        max-height: 60vh;
+    }
+}
+
+/* ========== Dark Mode Adjustments ========== */
+.dark-mode .tool-item {
+    background: var(--bg-header);
+}
+
+.dark-mode .tool-item:hover {
+    background: rgba(90, 159, 233, 0.12);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
 /* JSON Hash Tool Documentation */
 .hash-tool-docs-toggle {
     background: none;

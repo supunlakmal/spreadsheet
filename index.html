@@ -30,7 +30,9 @@
     <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://www.googletagmanager.com https://unpkg.com 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com https://unpkg.com https://*.peerjs.com wss://*.peerjs.com https://*.metered.live;">
     <title>Spreadsheet</title>
-    <link rel="icon" href="favicon.png" type="image/png">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="icon" href="favicon.png" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" sizes="180x180">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -352,64 +354,24 @@
                         class="fa-solid fa-xmark"></i></button>
             </div>
 
-            <div class="tools-grid">
-                <!-- Section: View -->
-                <div class="tools-section">
-                    <h4>View</h4>
-                    <div class="tools-list">
-                        <button id="toggle-readonly" type="button" class="tool-item"><i
-                                class="fa-solid fa-pen-to-square"></i> Toggle Read-only</button>
-                    </div>
-                </div>
-
-                <!-- Section: Data & File -->
-                <div class="tools-section">
-                    <h4>Data & File</h4>
-                    <div class="tools-list">
-                        <button id="open-templates-btn" type="button" class="tool-item"><i
-                                class="fa-solid fa-table-cells-large"></i> Template Gallery</button>
-                        <button id="import-csv" type="button" class="tool-item"><i class="fa-solid fa-file-import"></i>
-                            Import CSV</button>
-                        <button id="export-csv" type="button" class="tool-item"><i class="fa-solid fa-file-csv"></i>
-                            Export CSV</button>
-                        <button id="export-excel" type="button" class="tool-item"><i class="fa-solid fa-file-excel"></i>
-                            Export Excel</button>
-                        <button id="open-json-btn" type="button" class="tool-item"><i class="fa-solid fa-file-code"></i>
-                            Copy JSON</button>
-                        <button id="open-hash-tool-btn" type="button" class="tool-item"><i
-                                class="fa-solid fa-hashtag"></i>
-                            JSON Hash Tool</button>
-                    </div>
-                </div>
-
-                <!-- Section: Share & Embed -->
-                <div class="tools-section">
-                    <h4>Share & Embed</h4>
-                    <div class="tools-list">
-                        <button id="copy-url" type="button" class="tool-item"><i class="fa-solid fa-copy"></i> Copy
-                            Link</button>
-                        <button id="qr-btn" type="button" class="tool-item"><i class="fa-solid fa-qrcode"></i> QR
-                            Code</button>
-                        <button id="generate-embed" type="button" class="tool-item"><i class="fa-solid fa-code"></i>
-                            Embed Code</button>
-                        <button id="present-btn" type="button" class="tool-item"><i class="fa-solid fa-tv"></i>
-                            Presentation Mode</button>
-                    </div>
-                </div>
-
-                <!-- Section: Advanced -->
-                <div class="tools-section">
-                    <h4>Advanced</h4>
-                    <div class="tools-list">
-                        <button id="p2p-btn" type="button" class="tool-item"><i class="fa-solid fa-users"></i> Live
-                            Collaboration</button>
-                        <button id="trace-deps-btn" type="button" class="tool-item"><i
-                                class="fa-solid fa-diagram-project"></i> Trace Dependencies</button>
-                        <button id="lock-btn" type="button" class="tool-item"><i class="fa-solid fa-lock-open"></i>
-                            Password Protect</button>
-                    </div>
-                </div>
+            <!-- Search Bar -->
+            <div class="tools-search-container">
+                <i class="fa-solid fa-search tools-search-icon"></i>
+                <input type="text" id="tools-search-input" placeholder="Search tools..." autocomplete="off"
+                    class="tools-search-input">
             </div>
+
+            <!-- Dynamic Tools Grid (populated by JavaScript) -->
+            <div id="tools-dynamic-grid" class="tools-grid">
+                <!-- Tools will be loaded here by ToolsMenuManager -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="tools-empty-state" class="tools-empty-state hidden">
+                <i class="fa-solid fa-search"></i>
+                <p>No tools found matching your search</p>
+            </div>
+
             <!-- Hidden file input moved here -->
             <input id="import-csv-file" type="file" accept=".csv,text/csv" hidden>
         </div>

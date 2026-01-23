@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Sitemap: https://spreadsheetlive.netlify.app/sitemap.xml
+Sitemap: https://spreadsheetlive.netlify.app/sitemap.txt
