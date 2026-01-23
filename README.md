@@ -79,6 +79,7 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 
 - **Add Row** - Expand grid rows as needed
 - **Add Column** - Expand grid columns as needed
+- **Row/Column Menus** - Header menus for quick insert/delete actions
 - **Resize Rows/Columns** - Drag header handles to adjust sizes
 - **Clear Spreadsheet** - Reset to empty 10x10 grid with confirmation
 - **Live Grid Size** - Display shows current dimensions
@@ -87,7 +88,13 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 
 - **CSV Import** - Load .csv files from the toolbar
 - **CSV Export** - Download the current grid as `spreadsheet.csv`
+- **Excel Export** - Download as `.xlsx` with formulas and basic formatting
 - **Formula-aware Import** - SUM/AVG formulas are preserved; unsupported formulas are imported as text
+
+### Tools Menu
+
+- **Centralized Actions** - Access templates, import/export, sharing, presentation, and collaboration in one place
+- **Grouped Categories** - View, Data & File, Share & Embed, and Advanced sections
 
 ### Templates Gallery
 
@@ -605,7 +612,14 @@ If `METERED_API_KEY` is not configured:
 
 ## Recent Updates
 
-### Latest - Template Gallery + Presentation Mode
+### Latest - Tools Menu + Excel Export + JSON Hash Tool
+
+- Added a centralized Tools menu with grouped categories for faster access
+- Added Excel (.xlsx) export with formulas and basic formatting
+- Added JSON Hash Tool to convert JSON ↔ URL hashes with size stats
+- Added row/column header menus for quick insert/delete actions
+
+### Recent - Template Gallery + Presentation Mode
 
 - Added a searchable Template Gallery with pre-built sheets from `templates.json`
 - One-click "Use Template" opens a new tab with the template prefilled
