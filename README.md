@@ -17,20 +17,29 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 
 ## Screenshots
 
-- Default grid (unencrypted):  
-  ![Default spreadsheet grid](demo/main_light.png)
-- Password prompt before encrypting:  
-  ![Password modal before encryption](demo/password.png)
-- Unlocking an encrypted link:  
-  ![Unlock modal when opening encrypted URL](demo/open.png)
-- Raw JSON (AI bridge) modal:  
-  ![Raw JSON modal for AI editing](demo/ai.png)
-- Embed code generator (read-only iframe):  
-  ![Embed modal with iframe snippet](demo/iframe.png)
-- QR code for mobile handoff:  
-  ![QR modal to open the sheet on mobile](demo/qr.png)
-- Live Collaboration:  
-  ![Live Collaboration](demo/host.png)
+| Default grid | Password prompt |
+|---|---|
+| ![Default spreadsheet grid](demo/main_light.png) | ![Password modal before encryption](demo/password.png) |
+
+| Unlock encrypted link | Raw JSON modal |
+|---|---|
+| ![Unlock modal](demo/open.png) | ![Raw JSON modal](demo/ai.png) |
+
+| Embed generator | QR handoff |
+|---|---|
+| ![Embed modal](demo/iframe.png) | ![QR modal](demo/qr.png) |
+
+| Menu | Template gallery |
+|---|---|
+| ![Main menu](demo/menu.png) | ![Template gallery](demo/Template%20Gallery.png) |
+
+| JSON Hash Tool | Formula dependencies |
+|---|---|
+| ![JSON Hash Tool](demo/JSON%20Hash%20Tool.png) | ![Formula dependencies](demo/dependencies.png) |
+
+| Live Collaboration |  |
+|---|---|
+| ![Live Collaboration](demo/host.png) |  |
 
 ## Features
 
