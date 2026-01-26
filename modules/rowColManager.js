@@ -36,6 +36,8 @@ const state = {
   resizeState: null,
 };
 
+let hasAnimatedInitialLoad = false;
+
 // ========== Callbacks ==========
 let callbacks = {
   debouncedUpdateURL: null,
@@ -113,6 +115,7 @@ export function renderGrid() {
   if (!container) return;
 
   const isReadOnly = callbacks.getReadOnlyFlag ? callbacks.getReadOnlyFlag() : false;
+  const shouldCascade = !hasAnimatedInitialLoad;
 
   const data = callbacks.getDataArray ? callbacks.getDataArray() : [];
   const cellStyles = callbacks.getCellStylesArray ? callbacks.getCellStylesArray() : [];
@@ -199,6 +202,11 @@ export function renderGrid() {
     for (let col = 0; col < state.cols; col++) {
       const cell = document.createElement("div");
       cell.className = "cell";
+      if (shouldCascade) {
+        cell.classList.add("cell-cascade");
+        const delay = row * 0.05 + col * 0.05;
+        cell.style.animationDelay = `${delay}s`;
+      }
 
       const contentDiv = document.createElement("div");
       contentDiv.className = "cell-content";
@@ -231,6 +239,7 @@ export function renderGrid() {
   }
 
   updateUI();
+  hasAnimatedInitialLoad = true;
 }
 
 // ========== Header Highlighting ==========

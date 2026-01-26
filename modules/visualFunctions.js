@@ -12,6 +12,78 @@ const COLOR_ALIASES = {
   white: "#ffffff",
 };
 
+export function animateValue(cell, start, end, duration = 600, displayValue = null) {
+  if (!cell) return false;
+
+  const endValue = Number(end);
+  if (!Number.isFinite(endValue)) {
+    cell.classList.remove("value-animating");
+    return false;
+  }
+
+  const startValue = Number.isFinite(Number(start)) ? Number(start) : 0;
+  const finalText = displayValue !== null && displayValue !== undefined ? String(displayValue) : String(endValue);
+  const prefersReducedMotion = typeof window !== "undefined"
+    && window.matchMedia
+    && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  cell.dataset.animateTarget = finalText;
+
+  if (cell.__valueTimer) {
+    clearInterval(cell.__valueTimer);
+    cell.__valueTimer = null;
+  }
+
+  if (prefersReducedMotion || !Number.isInteger(startValue) || !Number.isInteger(endValue)) {
+    cell.textContent = finalText;
+    cell.classList.remove("value-animating");
+    delete cell.dataset.animateTarget;
+    return true;
+  }
+
+  const range = endValue - startValue;
+  if (range === 0) {
+    cell.textContent = finalText;
+    cell.classList.remove("value-animating");
+    delete cell.dataset.animateTarget;
+    return true;
+  }
+
+  const steps = Math.abs(range);
+  const stepTime = Math.abs(Math.floor(duration / steps));
+
+  // Fallback for large ranges to prevent freezing
+  if (!Number.isFinite(stepTime) || stepTime < 3 || steps > 300) {
+    cell.textContent = finalText;
+    cell.classList.remove("value-animating");
+    delete cell.dataset.animateTarget;
+    return true;
+  }
+
+  cell.classList.add("value-animating");
+  let current = startValue;
+  cell.textContent = String(current);
+
+  cell.__valueTimer = setInterval(() => {
+    current += range > 0 ? 1 : -1;
+    cell.textContent = String(current);
+
+    if (current === endValue) {
+      clearInterval(cell.__valueTimer);
+      cell.__valueTimer = null;
+      cell.textContent = finalText;
+      cell.classList.remove("value-animating");
+      delete cell.dataset.animateTarget;
+      cell.style.animation = "flashGreen 0.5s";
+      cell.addEventListener("animationend", () => {
+        cell.style.animation = "";
+      }, { once: true });
+    }
+  }, stepTime);
+
+  return true;
+}
+
 function splitArgs(raw) {
   if (!raw) return [];
   if (!raw.trim()) return [];

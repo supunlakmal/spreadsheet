@@ -18,6 +18,7 @@ import { UIModeManager } from "./modules/uiModeManager.js";
 import { QRCodeManager } from "./modules/qrCodeManager.js";
 import { CellFormattingManager } from "./modules/cellFormattingManager.js";
 import { SelectionStatusManager } from "./modules/selectionStatusManager.js";
+import { animateValue } from "./modules/visualFunctions.js";
 import {
   addColumn,
   addRow,
@@ -233,9 +234,23 @@ import {
           const cellContent = container.querySelector(`.cell-content[data-row="${r}"][data-col="${c}"]`);
           if (!cellContent) continue;
 
+          const nextValue = data[r][c] === undefined || data[r][c] === null ? "" : String(data[r][c]);
           const isEditingFormula = cellContent === activeElement && cellContent.innerText.trim().startsWith("=");
-          if (!isEditingFormula) {
-            cellContent.innerText = data[r][c];
+          const isAnimatingValue = cellContent.classList.contains("value-animating");
+          const animTarget = cellContent.dataset.animateTarget;
+          if (isAnimatingValue && animTarget && animTarget !== nextValue) {
+            if (cellContent.__valueTimer) {
+              clearInterval(cellContent.__valueTimer);
+              cellContent.__valueTimer = null;
+            }
+            cellContent.classList.remove("value-animating");
+            delete cellContent.dataset.animateTarget;
+            cellContent.innerText = nextValue;
+            continue;
+          }
+
+          if (!isEditingFormula && !isAnimatingValue) {
+            cellContent.innerText = nextValue;
           }
         }
       }
@@ -432,6 +447,75 @@ import {
     return !!(editingCell && editingCell.row === row && editingCell.col === col);
   }
 
+  function parseNumericValue(value) {
+    if (value === null || value === undefined) return null;
+    const normalized = String(value).replace(/,/g, "").trim();
+    if (!normalized) return null;
+    const num = Number(normalized);
+    return Number.isFinite(num) ? num : null;
+  }
+
+  function applyAnimatedResult(target, startValue, result) {
+    if (!target) return;
+    const displayResult = String(result);
+    const endValue = parseNumericValue(displayResult);
+
+    if (endValue === null) {
+      target.innerText = displayResult;
+      target.classList.remove("value-animating");
+      return;
+    }
+
+    const handled = animateValue(target, startValue, endValue, 600, displayResult);
+    if (!handled) {
+      target.innerText = displayResult;
+      target.classList.remove("value-animating");
+    }
+  }
+
+  function updateGhostCursor(target) {
+    if (!(target instanceof Element)) return;
+    if (!target.classList.contains("cell-content")) return;
+
+    const cursor = document.getElementById("ghost-cursor");
+    const wrapper = document.querySelector(".grid-wrapper");
+    if (!cursor || !wrapper) return;
+
+    const cell = target.parentElement;
+    if (!cell) return;
+
+    const cellRect = cell.getBoundingClientRect();
+    const wrapperRect = wrapper.getBoundingClientRect();
+
+    const offsetX = cellRect.left - wrapperRect.left + wrapper.scrollLeft;
+    const offsetY = cellRect.top - wrapperRect.top + wrapper.scrollTop;
+
+    cursor.style.width = `${cellRect.width}px`;
+    cursor.style.height = `${cellRect.height}px`;
+    cursor.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
+    cursor.style.opacity = "1";
+  }
+
+  function hideGhostCursor() {
+    const cursor = document.getElementById("ghost-cursor");
+    if (!cursor) return;
+    cursor.style.opacity = "0";
+  }
+
+  function triggerRipple(cell) {
+    if (!cell) return;
+    cell.classList.remove("ripple-active");
+    void cell.offsetWidth;
+    cell.classList.add("ripple-active");
+    if (cell.__rippleTimer) {
+      clearTimeout(cell.__rippleTimer);
+    }
+    cell.__rippleTimer = setTimeout(() => {
+      cell.classList.remove("ripple-active");
+      cell.__rippleTimer = null;
+    }, 600);
+  }
+
   function handleFocusIn(event) {
     const target = event.target;
     if (!target.classList.contains("cell-content")) return;
@@ -458,6 +542,8 @@ import {
     if (formulas[row][col] && formulas[row][col].startsWith("=")) {
       target.innerText = formulas[row][col];
     }
+
+    updateGhostCursor(target);
 
     if (canBroadcastP2P()) {
       P2PManager.broadcastCursor(row, col, "#ff0055");
@@ -486,10 +572,18 @@ import {
 
       if (rawValue.startsWith("=")) {
         // NOW evaluate the formula
+        const startValueRaw = data[row] ? parseNumericValue(data[row][col]) : null;
+        const startValue = startValueRaw === null ? 0 : startValueRaw;
         formulas[row][col] = rawValue;
         const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
-        data[row][col] = String(result);
-        target.innerText = String(result);
+        const displayResult = String(result);
+        data[row][col] = displayResult;
+
+        const endValue = parseNumericValue(displayResult);
+        if (endValue !== null) {
+          target.classList.add("value-animating");
+          target.dataset.animateTarget = displayResult;
+        }
 
         // Recalculate all dependent formulas
         recalculateFormulas();
@@ -501,6 +595,8 @@ import {
         if (previousFormula !== formulas[row][col]) {
           scheduleDependencyDraw();
         }
+
+        applyAnimatedResult(target, startValue, result);
       }
     }
 
@@ -519,6 +615,7 @@ import {
       return;
     }
 
+    hideGhostCursor();
     clearActiveHeaders();
   }
 
@@ -551,6 +648,7 @@ import {
   function handleGridResize() {
     scheduleFullSync();
     scheduleDependencyDraw();
+    updateGhostCursor(document.activeElement);
   }
 
   function handleP2PConnection(amIHost) {
@@ -618,6 +716,11 @@ import {
       } else {
         cellContent.innerHTML = safeValue;
       }
+    }
+
+    const cell = getCellElement(rowIndex, colIndex);
+    if (cell) {
+      triggerRipple(cell);
     }
 
     if (!isFormulaEdit) {
@@ -826,10 +929,18 @@ import {
       const rawValue = target.innerText.trim();
       if (rawValue.startsWith("=")) {
         const previousFormula = formulas[row] ? formulas[row][col] : "";
+        const startValueRaw = data[row] ? parseNumericValue(data[row][col]) : null;
+        const startValue = startValueRaw === null ? 0 : startValueRaw;
         formulas[row][col] = rawValue;
         const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
-        data[row][col] = String(result);
-        target.innerText = String(result);
+        const displayResult = String(result);
+        data[row][col] = displayResult;
+
+        const endValue = parseNumericValue(displayResult);
+        if (endValue !== null) {
+          target.classList.add("value-animating");
+          target.dataset.animateTarget = displayResult;
+        }
         recalculateFormulas();
         debouncedUpdateURL();
         if (canBroadcastP2P()) {
@@ -838,6 +949,8 @@ import {
         if (previousFormula !== formulas[row][col]) {
           scheduleDependencyDraw();
         }
+
+        applyAnimatedResult(target, startValue, result);
 
         // Exit formula edit mode
         formulaEditMode = false;
