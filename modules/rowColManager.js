@@ -19,6 +19,7 @@ import { colToLetter } from "./formulaManager.js";
 import { sanitizeHTML } from "./security.js";
 import { showToast } from "./toastManager.js";
 import { createDefaultColumnWidths, createDefaultRowHeights, createEmptyCellStyle, createEmptyCellStyles, createEmptyData } from "./urlManager.js";
+import { buildSparklineSVG, getSparklineDisplayText, parseSparklineValues } from "./visualFunctions.js";
 
 // ========== State ==========
 const state = {
@@ -35,6 +36,38 @@ const state = {
   activeCol: null,
   resizeState: null,
 };
+
+const SPARKLINE_LAYER_CLASS = "sparkline-layer";
+const ACTIVE_ROW_CLASS = "active-row";
+const ZEN_ROW_FOCUS_CLASS = "zen-row-focus";
+
+function updateSparklineLayer(cell, cellContent, rawValue, formulaValue = "") {
+  if (!cell || !cellContent) return;
+
+  const source = formulaValue || rawValue;
+  const values = parseSparklineValues(source);
+  const existingLayer = cell.querySelector(`.${SPARKLINE_LAYER_CLASS}`);
+
+  if (!values) {
+    cell.classList.remove("has-sparkline");
+    if (existingLayer) {
+      existingLayer.remove();
+    }
+    return;
+  }
+
+  cell.classList.add("has-sparkline");
+
+  let layer = existingLayer;
+  if (!layer) {
+    layer = document.createElement("div");
+    layer.className = SPARKLINE_LAYER_CLASS;
+    layer.setAttribute("aria-hidden", "true");
+    cell.insertBefore(layer, cellContent);
+  }
+
+  layer.innerHTML = buildSparklineSVG(values);
+}
 
 // ========== Callbacks ==========
 let callbacks = {
@@ -115,6 +148,7 @@ export function renderGrid() {
   const isReadOnly = callbacks.getReadOnlyFlag ? callbacks.getReadOnlyFlag() : false;
 
   const data = callbacks.getDataArray ? callbacks.getDataArray() : [];
+  const formulas = callbacks.getFormulasArray ? callbacks.getFormulasArray() : [];
   const cellStyles = callbacks.getCellStylesArray ? callbacks.getCellStylesArray() : [];
 
   // Clear selection when grid is re-rendered
@@ -123,6 +157,7 @@ export function renderGrid() {
   state.isSelecting = false;
   state.hoverRow = null;
   state.hoverCol = null;
+  clearActiveRowHighlight(state.activeRow);
   if (callbacks.onSelectionChange) {
     callbacks.onSelectionChange(null);
   }
@@ -205,7 +240,10 @@ export function renderGrid() {
       contentDiv.contentEditable = isReadOnly ? "false" : "true";
       contentDiv.dataset.row = row;
       contentDiv.dataset.col = col;
-      contentDiv.innerHTML = sanitizeHTML(data[row] ? data[row][col] || "" : "");
+      const rawValue = data[row] ? data[row][col] || "" : "";
+      const formulaValue = formulas[row] ? formulas[row][col] || "" : "";
+      const sparklineDisplay = getSparklineDisplayText(formulaValue);
+      contentDiv.innerHTML = sanitizeHTML(sparklineDisplay || rawValue);
       contentDiv.setAttribute("aria-label", `Cell ${colToLetter(col)}${row + 1}`);
 
       const style = cellStyles[row] ? cellStyles[row][col] : null;
@@ -226,6 +264,7 @@ export function renderGrid() {
       }
 
       cell.appendChild(contentDiv);
+      updateSparklineLayer(cell, contentDiv, rawValue, formulaValue);
       container.appendChild(cell);
     }
   }
@@ -233,11 +272,50 @@ export function renderGrid() {
   updateUI();
 }
 
+function clearActiveRowHighlight(row) {
+  if (row === null || row === undefined || Number.isNaN(row)) return;
+  const container = document.getElementById("spreadsheet");
+  if (!container) return;
+
+  container.querySelectorAll(`.cell-content[data-row="${row}"]`).forEach((cellContent) => {
+    if (cellContent.parentElement) {
+      cellContent.parentElement.classList.remove(ACTIVE_ROW_CLASS);
+    }
+  });
+
+  const rowHeader = container.querySelector(`.row-header[data-row="${row}"]`);
+  if (rowHeader) rowHeader.classList.remove(ACTIVE_ROW_CLASS);
+
+  if (document.body) {
+    document.body.classList.remove(ZEN_ROW_FOCUS_CLASS);
+  }
+}
+
+function setActiveRowHighlight(row) {
+  if (row === null || row === undefined || Number.isNaN(row)) return;
+  const container = document.getElementById("spreadsheet");
+  if (!container) return;
+
+  container.querySelectorAll(`.cell-content[data-row="${row}"]`).forEach((cellContent) => {
+    if (cellContent.parentElement) {
+      cellContent.parentElement.classList.add(ACTIVE_ROW_CLASS);
+    }
+  });
+
+  const rowHeader = container.querySelector(`.row-header[data-row="${row}"]`);
+  if (rowHeader) rowHeader.classList.add(ACTIVE_ROW_CLASS);
+
+  if (document.body) {
+    document.body.classList.add(ZEN_ROW_FOCUS_CLASS);
+  }
+}
+
 // ========== Header Highlighting ==========
 export function clearActiveHeaders() {
   if (state.activeRow !== null) {
     const rowHeader = document.querySelector(`.row-header[data-row="${state.activeRow}"]`);
     if (rowHeader) rowHeader.classList.remove(ACTIVE_HEADER_CLASS);
+    clearActiveRowHighlight(state.activeRow);
   }
   if (state.activeCol !== null) {
     const colHeader = document.querySelector(`.col-header[data-col="${state.activeCol}"]`);
@@ -248,16 +326,20 @@ export function clearActiveHeaders() {
 }
 
 export function setActiveHeaders(row, col) {
-  if (state.activeRow === row && state.activeCol === col) return;
-  clearActiveHeaders();
-  state.activeRow = row;
-  state.activeCol = col;
+  const isSameTarget = state.activeRow === row && state.activeCol === col;
+  if (!isSameTarget) {
+    clearActiveHeaders();
+    state.activeRow = row;
+    state.activeCol = col;
+  }
 
   const rowHeader = document.querySelector(`.row-header[data-row="${row}"]`);
   if (rowHeader) rowHeader.classList.add(ACTIVE_HEADER_CLASS);
 
   const colHeader = document.querySelector(`.col-header[data-col="${col}"]`);
   if (colHeader) colHeader.classList.add(ACTIVE_HEADER_CLASS);
+
+  setActiveRowHighlight(row);
 }
 
 export function setActiveHeadersForRange(minRow, maxRow, minCol, maxCol) {
@@ -265,6 +347,7 @@ export function setActiveHeadersForRange(minRow, maxRow, minCol, maxCol) {
   document.querySelectorAll(`.${ACTIVE_HEADER_CLASS}`).forEach((el) => {
     el.classList.remove(ACTIVE_HEADER_CLASS);
   });
+  clearActiveRowHighlight(state.activeRow);
 
   // Highlight all row headers in range
   for (let r = minRow; r <= maxRow; r++) {
@@ -279,8 +362,11 @@ export function setActiveHeadersForRange(minRow, maxRow, minCol, maxCol) {
   }
 
   // Update active row/col tracking
-  state.activeRow = minRow;
-  state.activeCol = minCol;
+  const activeRow = state.selectionEnd ? state.selectionEnd.row : minRow;
+  const activeCol = state.selectionEnd ? state.selectionEnd.col : minCol;
+  state.activeRow = activeRow;
+  state.activeCol = activeCol;
+  setActiveRowHighlight(activeRow);
 }
 
 // ========== Selection Functions ==========
@@ -380,6 +466,7 @@ export function clearSelectedCells() {
       const cell = container.querySelector(`.cell-content[data-row="${r}"][data-col="${c}"]`);
       if (cell) {
         cell.innerHTML = "";
+        updateSparklineLayer(cell.parentElement, cell, "");
       }
     }
   }
@@ -549,6 +636,11 @@ export function getCellContentElement(row, col) {
 export function getCellElement(row, col) {
   const cellContent = getCellContentElement(row, col);
   return cellContent ? cellContent.parentElement : null;
+}
+
+export function updateSparklineForCellElement(cellContent, rawValue, formulaValue = "") {
+  if (!cellContent || !cellContent.parentElement) return;
+  updateSparklineLayer(cellContent.parentElement, cellContent, rawValue, formulaValue);
 }
 
 export function focusCellAt(row, col) {

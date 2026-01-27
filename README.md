@@ -17,29 +17,29 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 
 ## Screenshots
 
-| Default grid | Password prompt |
-|---|---|
+| Default grid                                     | Password prompt                                        |
+| ------------------------------------------------ | ------------------------------------------------------ |
 | ![Default spreadsheet grid](demo/main_light.png) | ![Password modal before encryption](demo/password.png) |
 
-| Unlock encrypted link | Raw JSON modal |
-|---|---|
+| Unlock encrypted link          | Raw JSON modal                 |
+| ------------------------------ | ------------------------------ |
 | ![Unlock modal](demo/open.png) | ![Raw JSON modal](demo/ai.png) |
 
-| Embed generator | QR handoff |
-|---|---|
+| Embed generator                 | QR handoff               |
+| ------------------------------- | ------------------------ |
 | ![Embed modal](demo/iframe.png) | ![QR modal](demo/qr.png) |
 
-| Menu | Template gallery |
-|---|---|
+| Menu                        | Template gallery                                 |
+| --------------------------- | ------------------------------------------------ |
 | ![Main menu](demo/menu.png) | ![Template gallery](demo/Template%20Gallery.png) |
 
-| JSON Hash Tool | Formula dependencies |
-|---|---|
+| JSON Hash Tool                                 | Formula dependencies                           |
+| ---------------------------------------------- | ---------------------------------------------- |
 | ![JSON Hash Tool](demo/JSON%20Hash%20Tool.png) | ![Formula dependencies](demo/dependencies.png) |
 
-| Live Collaboration |  |
-|---|---|
-| ![Live Collaboration](demo/host.png) |  |
+| Live Collaboration                   |     |
+| ------------------------------------ | --- |
+| ![Live Collaboration](demo/host.png) |     |
 
 ## Features
 
@@ -184,7 +184,7 @@ A lightweight, client-only spreadsheet web application. All data persists in the
 
 - **Password-protected links** - AES-GCM encryption with PBKDF2 key derivation; tampering detection via GCM tag
 - **HTML Sanitization** - DOMParser-based whitelist for tags and safe styles
-- **Formula Validation** - Only SUM/AVG range syntax is accepted in formulas
+- **Formula Validation** - Only SUM/AVG range syntax and visual formulas (CHART) are accepted in formulas
 - **Safe URL Parsing** - Prototype pollution guards and hash length checks
 - **Style Guardrails** - CSS color validation for user-provided styles
 - **Content Security Policy** - CSP restricts scripts/styles/imgs/fonts to trusted sources
@@ -406,9 +406,9 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 | Shift+Arrow                      | Extend selection                                                                    |
 | Enter                            | Evaluate formula and move down (or insert formula suggestion when dropdown is open) |
 | Escape                           | Clear selection / Close formula dropdown / Exit presentation mode                   |
-| Space / PageDown / ArrowDown      | Next slide (presentation mode)                                                      |
-| PageUp / ArrowUp                  | Previous slide (presentation mode)                                                  |
-| Home / End                        | First/last slide (presentation mode)                                                |
+| Space / PageDown / ArrowDown     | Next slide (presentation mode)                                                      |
+| PageUp / ArrowUp                 | Previous slide (presentation mode)                                                  |
+| Home / End                       | First/last slide (presentation mode)                                                |
 | Arrow Up/Down (formula dropdown) | Navigate suggestions                                                                |
 | Tab (formula dropdown)           | Insert active suggestion                                                            |
 
@@ -441,7 +441,7 @@ When you edit cells, the URL updates automatically (debounced at 200ms). Formula
 ## Limitations
 
 - Default grid: 10 rows x 10 columns (expand as needed)
-- Formulas limited to SUM and AVG range syntax
+- Formulas limited to SUM/AVG range syntax plus visual formulas (CHART); CHART currently accepts comma-separated numbers only
 - Very large sheets may hit browser performance or URL length limits; encrypted links are longer
 - Losing the password means the encrypted data cannot be recovered
 - P2P collaboration limited to 1 host + 1 joiner (no multi-user rooms)
@@ -549,7 +549,7 @@ The app uses a Netlify Function to securely fetch TURN credentials:
 
 - **API Key Protection** - TURN API key stored server-side in Netlify env var
 - **HTML Sanitization** - All incoming cell values sanitized via DOMParser whitelist
-- **Formula Validation** - Only SUM/AVG formulas allowed (regex validation)
+- **Formula Validation** - Only SUM/AVG and visual formulas (CHART) allowed (regex validation)
 - **Bounds Checking** - Cell updates validated against grid dimensions
 - **No E2E Encryption** - Data channel uses DTLS (transport encryption only)
 

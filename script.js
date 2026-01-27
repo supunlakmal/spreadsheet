@@ -3,7 +3,7 @@
 
 // Import constants from ES6 module
 import { DEBOUNCE_DELAY, DEFAULT_COLS, DEFAULT_ROWS, MAX_COLS, MAX_ROWS } from "./modules/constants.js";
-import { buildRangeRef, FormulaDropdownManager, FormulaEvaluator, isValidFormula } from "./modules/formulaManager.js";
+import { buildRangeRef, FormulaDropdownManager, FormulaEvaluator, isValidFormula, isVisualFormula } from "./modules/formulaManager.js";
 import { DependencyTracer } from "./modules/dependencyTracer.js";
 import { PasswordManager } from "./modules/passwordManager.js";
 import { CSVManager } from "./modules/csvManager.js";
@@ -13,11 +13,13 @@ import { HashToolManager } from "./modules/hashToolManager.js";
 import { P2PManager } from "./modules/p2pManager.js";
 import { PresentationManager } from "./modules/presentationManager.js";
 import { TemplateManager } from "./modules/templateManager.js";
+import { CommandPaletteManager } from "./modules/commandPaletteManager.js";
 import { ThemeManager } from "./modules/themeManager.js";
 import { UIModeManager } from "./modules/uiModeManager.js";
 import { QRCodeManager } from "./modules/qrCodeManager.js";
 import { CellFormattingManager } from "./modules/cellFormattingManager.js";
 import { SelectionStatusManager } from "./modules/selectionStatusManager.js";
+import { getSparklineDisplayText } from "./modules/visualFunctions.js";
 import {
   addColumn,
   addRow,
@@ -43,6 +45,7 @@ import {
   setActiveHeaders,
   setCallbacks,
   setState,
+  updateSparklineForCellElement,
   updateSelectionVisuals,
   insertRowAt,
   insertColumnAt,
@@ -87,6 +90,9 @@ import {
   // Embed mode flag
   let isEmbedMode = false;
 
+  // Zen mode flag
+  let isZenMode = false;
+
   // Debounce timer
   let debounceTimer = null;
   let dependencyDrawQueued = false;
@@ -104,6 +110,14 @@ import {
   let fullSyncTimer = null;
   const FULL_SYNC_DELAY = 300;
   const REMOTE_CURSOR_CLASS = "remote-active";
+  const LEGACY_REMOTE_ID = "remote-peer";
+  const PEER_ACTIVITY_THROTTLE = 800;
+  const PEER_ACTIVITY_DECAY = 1600;
+  let presenceStackEl = null;
+  let lastActivitySentAt = 0;
+  let localPeerMeta = null;
+  const presencePeers = new Map();
+  const presenceActivityTimers = new Map();
 
   const p2pUI = {
     modal: null,
@@ -212,6 +226,9 @@ import {
         for (let c = 0; c < cols; c++) {
           const formula = formulas[r][c];
           if (formula && formula.startsWith("=")) {
+            if (isVisualFormula(formula)) {
+              continue;
+            }
             const result = String(FormulaEvaluator.evaluate(formula, { getCellValue, data, rows, cols }));
             if (data[r][c] !== result) {
               data[r][c] = result;
@@ -236,6 +253,7 @@ import {
           const isEditingFormula = cellContent === activeElement && cellContent.innerText.trim().startsWith("=");
           if (!isEditingFormula) {
             cellContent.innerText = data[r][c];
+            updateSparklineForCellElement(cellContent, data[r][c], formula);
           }
         }
       }
@@ -353,6 +371,35 @@ import {
     DependencyTracer.init();
     scheduleDependencyDraw();
   }
+
+  // ========== Zen Mode ==========
+  const ZEN_MODE_CLASS = "zen-mode";
+
+  function applyZenMode(enabled) {
+    isZenMode = enabled;
+    document.body.classList.toggle(ZEN_MODE_CLASS, enabled);
+
+    const toggleZenBtn = document.getElementById("toggle-zen");
+    if (toggleZenBtn) {
+      toggleZenBtn.classList.toggle("active", enabled);
+      toggleZenBtn.setAttribute("aria-pressed", enabled ? "true" : "false");
+      const icon = toggleZenBtn.querySelector("i");
+      if (icon) icon.className = enabled ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
+    }
+  }
+
+  function toggleZenMode() {
+    applyZenMode(!isZenMode);
+  }
+
+  function handleZenModeShortcut(event) {
+    if (event.defaultPrevented) return;
+    const key = event.key ? event.key.toLowerCase() : "";
+    if (event.altKey && !event.ctrlKey && !event.metaKey && key === "z") {
+      event.preventDefault();
+      toggleZenMode();
+    }
+  }
   // Handle input changes
   function handleInput(event) {
     const target = event.target;
@@ -409,6 +456,7 @@ import {
       if (canBroadcastP2P()) {
         P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
       }
+      notifyLocalActivity(row, col);
       SelectionStatusManager.updateStatusBar();
       if (previousFormula !== formulas[row][col]) {
         scheduleDependencyDraw();
@@ -460,7 +508,8 @@ import {
     }
 
     if (canBroadcastP2P()) {
-      P2PManager.broadcastCursor(row, col, "#ff0055");
+      const cursorColor = localPeerMeta ? localPeerMeta.color : "#ff0055";
+      P2PManager.broadcastCursor(row, col, cursorColor);
     }
   }
 
@@ -479,6 +528,10 @@ import {
       return;
     }
 
+    if (!isNaN(row) && !isNaN(col)) {
+      notifyLocalActivityEnd(row, col);
+    }
+
     // Evaluate formula when blurred
     if (!isNaN(row) && !isNaN(col)) {
       const rawValue = target.innerText.trim();
@@ -487,21 +540,38 @@ import {
       if (rawValue.startsWith("=")) {
         // NOW evaluate the formula
         formulas[row][col] = rawValue;
-        const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
-        data[row][col] = String(result);
-        target.innerText = String(result);
+        const sparklineDisplay = getSparklineDisplayText(rawValue);
+        if (sparklineDisplay) {
+          data[row][col] = sparklineDisplay;
+          target.innerText = sparklineDisplay;
+          debouncedUpdateURL();
+          SelectionStatusManager.updateStatusBar();
+          if (canBroadcastP2P()) {
+            P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
+          }
+          if (previousFormula !== formulas[row][col]) {
+            scheduleDependencyDraw();
+          }
+        } else {
+          const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
+          data[row][col] = String(result);
+          target.innerText = String(result);
 
-        // Recalculate all dependent formulas
-        recalculateFormulas();
-        debouncedUpdateURL();
-        SelectionStatusManager.updateStatusBar();
-        if (canBroadcastP2P()) {
-          P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
-        }
-        if (previousFormula !== formulas[row][col]) {
-          scheduleDependencyDraw();
+          // Recalculate all dependent formulas
+          recalculateFormulas();
+          debouncedUpdateURL();
+          SelectionStatusManager.updateStatusBar();
+          if (canBroadcastP2P()) {
+            P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
+          }
+          if (previousFormula !== formulas[row][col]) {
+            scheduleDependencyDraw();
+          }
         }
       }
+
+      const sparklineValue = data[row] ? data[row][col] : rawValue;
+      updateSparklineForCellElement(target, sparklineValue, formulas[row] ? formulas[row][col] : "");
     }
 
     // Exit formula edit mode when focus truly leaves
@@ -520,6 +590,226 @@ import {
     }
 
     clearActiveHeaders();
+  }
+
+  function stringToColor(str) {
+    if (!str) return "#888888";
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hex = (hash & 0x00ffffff).toString(16).toUpperCase().padStart(6, "0");
+    return `#${hex}`;
+  }
+
+  function buildInitials(label) {
+    if (!label) return "??";
+    const cleaned = String(label).replace(/[^a-zA-Z0-9]/g, "");
+    if (!cleaned) return "??";
+    if (cleaned.length === 1) return `${cleaned}${cleaned}`.toUpperCase();
+    return cleaned.slice(0, 2).toUpperCase();
+  }
+
+  function buildPeerMeta({ peerId, name, isLocal = false } = {}) {
+    const resolvedId = peerId || LEGACY_REMOTE_ID;
+    const displayName = name || resolvedId;
+    return {
+      id: resolvedId,
+      name: displayName,
+      color: stringToColor(resolvedId),
+      initials: buildInitials(displayName),
+      isLocal,
+    };
+  }
+
+  function ensurePresenceStack() {
+    if (!presenceStackEl) {
+      presenceStackEl = document.getElementById("presence-stack");
+    }
+    return presenceStackEl;
+  }
+
+  function upsertPeer(peerMeta) {
+    const stack = ensurePresenceStack();
+    if (!stack || !peerMeta || !peerMeta.id) return;
+
+    const existing = presencePeers.get(peerMeta.id);
+    if (existing) {
+      existing.name = peerMeta.name || existing.name;
+      existing.color = peerMeta.color || existing.color;
+      existing.initials = peerMeta.initials || existing.initials;
+      if (typeof peerMeta.isLocal === "boolean") {
+        existing.isLocal = peerMeta.isLocal;
+      }
+      if (existing.el) {
+        existing.el.style.setProperty("--peer-color", existing.color);
+        existing.el.textContent = existing.initials;
+        existing.el.title = existing.name;
+        existing.el.setAttribute("aria-label", existing.name);
+        existing.el.classList.toggle("is-local", !!existing.isLocal);
+        existing.el.style.order = existing.isLocal ? "0" : "1";
+      }
+      return;
+    }
+
+    const avatar = document.createElement("div");
+    avatar.className = "presence-avatar is-entering";
+    avatar.dataset.peerId = peerMeta.id;
+    avatar.style.setProperty("--peer-color", peerMeta.color);
+    avatar.textContent = peerMeta.initials;
+    avatar.title = peerMeta.name;
+    avatar.setAttribute("aria-label", peerMeta.name);
+    avatar.setAttribute("role", "listitem");
+    avatar.style.order = peerMeta.isLocal ? "0" : "1";
+    if (peerMeta.isLocal) {
+      avatar.classList.add("is-local");
+    }
+    avatar.addEventListener(
+      "animationend",
+      () => {
+        avatar.classList.remove("is-entering");
+      },
+      { once: true }
+    );
+    stack.appendChild(avatar);
+
+    presencePeers.set(peerMeta.id, {
+      ...peerMeta,
+      el: avatar,
+      isActive: false,
+    });
+  }
+
+  function removePeer(peerId) {
+    const peer = presencePeers.get(peerId);
+    if (!peer) return;
+
+    if (peer.el) {
+      peer.el.classList.add("is-leaving");
+      peer.el.addEventListener(
+        "animationend",
+        () => {
+          if (peer.el && peer.el.parentNode) {
+            peer.el.parentNode.removeChild(peer.el);
+          }
+        },
+        { once: true }
+      );
+    }
+
+    presencePeers.delete(peerId);
+    if (presenceActivityTimers.has(peerId)) {
+      clearTimeout(presenceActivityTimers.get(peerId));
+      presenceActivityTimers.delete(peerId);
+    }
+  }
+
+  function clearPresence() {
+    presencePeers.forEach((peer) => {
+      if (peer.el && peer.el.parentNode) {
+        peer.el.parentNode.removeChild(peer.el);
+      }
+    });
+    presencePeers.clear();
+    presenceActivityTimers.forEach((timer) => clearTimeout(timer));
+    presenceActivityTimers.clear();
+    localPeerMeta = null;
+    lastActivitySentAt = 0;
+  }
+
+  function removeRemotePeers() {
+    presencePeers.forEach((peer, peerId) => {
+      if (!peer.isLocal) {
+        removePeer(peerId);
+      }
+    });
+  }
+
+  function setPeerActive(peerId, active, { decay = false } = {}) {
+    const peer = presencePeers.get(peerId);
+    if (!peer || !peer.el) return;
+
+    if (active) {
+      peer.el.classList.add("is-active");
+    } else {
+      peer.el.classList.remove("is-active");
+    }
+
+    if (presenceActivityTimers.has(peerId)) {
+      clearTimeout(presenceActivityTimers.get(peerId));
+      presenceActivityTimers.delete(peerId);
+    }
+
+    if (active && decay) {
+      const timer = setTimeout(() => {
+        setPeerActive(peerId, false);
+      }, PEER_ACTIVITY_DECAY);
+      presenceActivityTimers.set(peerId, timer);
+    }
+  }
+
+  function markPeerActivity(peerId) {
+    const resolvedId = peerId || LEGACY_REMOTE_ID;
+    if (!presencePeers.has(resolvedId)) {
+      upsertPeer(buildPeerMeta({ peerId: resolvedId }));
+    }
+    setPeerActive(resolvedId, true, { decay: true });
+  }
+
+  function registerLocalPeer(peerId) {
+    if (!peerId) return;
+    if (localPeerMeta && localPeerMeta.id !== peerId) {
+      clearPresence();
+    }
+    localPeerMeta = buildPeerMeta({ peerId, name: peerId, isLocal: true });
+    upsertPeer(localPeerMeta);
+  }
+
+  function sendPeerHello() {
+    if (!P2PManager.canSend() || !P2PManager.myPeerId) return;
+    const displayName = localPeerMeta ? localPeerMeta.name : P2PManager.myPeerId;
+    P2PManager.sendPeerHello({ peerId: P2PManager.myPeerId, name: displayName });
+  }
+
+  function handlePeerHello({ peerId, name } = {}) {
+    if (!peerId) return;
+    const isLocal = peerId === P2PManager.myPeerId;
+    upsertPeer(buildPeerMeta({ peerId, name, isLocal }));
+  }
+
+  function handlePeerActivity({ peerId, active } = {}) {
+    const resolvedId = peerId || LEGACY_REMOTE_ID;
+    if (!presencePeers.has(resolvedId)) {
+      upsertPeer(buildPeerMeta({ peerId: resolvedId }));
+    }
+    if (active === false) {
+      setPeerActive(resolvedId, false);
+      return;
+    }
+    setPeerActive(resolvedId, true, { decay: true });
+  }
+
+  function notifyLocalActivity(row, col) {
+    const peerId = P2PManager.myPeerId;
+    if (!peerId) return;
+    if (!localPeerMeta) {
+      registerLocalPeer(peerId);
+    }
+    setPeerActive(peerId, true, { decay: true });
+
+    if (!P2PManager.canSend()) return;
+    const now = Date.now();
+    if (now - lastActivitySentAt < PEER_ACTIVITY_THROTTLE) return;
+    lastActivitySentAt = now;
+    P2PManager.sendPeerActivity({ peerId, active: true, row, col });
+  }
+
+  function notifyLocalActivityEnd(row, col) {
+    const peerId = P2PManager.myPeerId;
+    if (!peerId) return;
+    setPeerActive(peerId, false);
+    if (!P2PManager.canSend()) return;
+    P2PManager.sendPeerActivity({ peerId, active: false, row, col });
   }
 
   // ========== P2P Collaboration ==========
@@ -555,6 +845,10 @@ import {
 
   function handleP2PConnection(amIHost) {
     hasInitialSync = amIHost;
+    if (P2PManager.myPeerId) {
+      registerLocalPeer(P2PManager.myPeerId);
+    }
+    sendPeerHello();
     if (amIHost) {
       recalculateFormulas();
       const fullState = buildCurrentState();
@@ -589,7 +883,7 @@ import {
     showToast("Synced with host!", "success");
   }
 
-  function handleRemoteCellUpdate({ row, col, value, formula }) {
+  function handleRemoteCellUpdate({ row, col, value, formula, senderId }) {
     const rowIndex = parseInt(row, 10);
     const colIndex = parseInt(col, 10);
     if (isNaN(rowIndex) || isNaN(colIndex)) return;
@@ -598,6 +892,11 @@ import {
     if (rowIndex < 0 || colIndex < 0 || rowIndex >= rows || colIndex >= cols) {
       P2PManager.requestFullSync();
       return;
+    }
+
+    const resolvedSenderId = senderId || LEGACY_REMOTE_ID;
+    if (resolvedSenderId) {
+      markPeerActivity(resolvedSenderId);
     }
 
     const rawValue = value === undefined || value === null ? "" : String(value);
@@ -618,6 +917,7 @@ import {
       } else {
         cellContent.innerHTML = safeValue;
       }
+      updateSparklineForCellElement(cellContent, data[rowIndex][colIndex], formulas[rowIndex][colIndex]);
     }
 
     if (!isFormulaEdit) {
@@ -631,7 +931,7 @@ import {
     isRemoteUpdate = false;
   }
 
-  function handleRemoteCursor({ row, col }) {
+  function handleRemoteCursor({ row, col, senderId, color }) {
     const rowIndex = parseInt(row, 10);
     const colIndex = parseInt(col, 10);
     if (isNaN(rowIndex) || isNaN(colIndex)) return;
@@ -639,11 +939,28 @@ import {
     const { rows, cols } = getState();
     if (rowIndex < 0 || colIndex < 0 || rowIndex >= rows || colIndex >= cols) return;
 
+    const resolvedSenderId = senderId || LEGACY_REMOTE_ID;
+    if (!presencePeers.has(resolvedSenderId)) {
+      const meta = buildPeerMeta({ peerId: resolvedSenderId });
+      if (!senderId && isValidCSSColor(color)) {
+        meta.color = color;
+      }
+      upsertPeer(meta);
+    }
+    const peer = presencePeers.get(resolvedSenderId);
+
     P2PManager.clearRemoteCursor();
     const cell = getCellElement(rowIndex, colIndex);
     if (cell) {
       cell.classList.add(REMOTE_CURSOR_CLASS);
+      if (peer) {
+        cell.style.setProperty("--peer-color", peer.color);
+        cell.dataset.peer = peer.initials;
+      } else {
+        cell.dataset.peer = "PE";
+      }
     }
+    markPeerActivity(resolvedSenderId);
   }
 
   function handleSyncRequest() {
@@ -655,6 +972,11 @@ import {
   function handleP2PDisconnect() {
     hasInitialSync = false;
     P2PManager.clearRemoteCursor();
+    if (P2PManager.myPeerId) {
+      removeRemotePeers();
+    } else {
+      clearPresence();
+    }
     P2PManager.resetControls();
     P2PManager.setStatus("Disconnected.");
     showToast("Peer disconnected", "warning");
@@ -827,22 +1149,38 @@ import {
       if (rawValue.startsWith("=")) {
         const previousFormula = formulas[row] ? formulas[row][col] : "";
         formulas[row][col] = rawValue;
-        const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
-        data[row][col] = String(result);
-        target.innerText = String(result);
-        recalculateFormulas();
-        debouncedUpdateURL();
-        if (canBroadcastP2P()) {
-          P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
-        }
-        if (previousFormula !== formulas[row][col]) {
-          scheduleDependencyDraw();
+        const sparklineDisplay = getSparklineDisplayText(rawValue);
+        if (sparklineDisplay) {
+          data[row][col] = sparklineDisplay;
+          target.innerText = sparklineDisplay;
+          debouncedUpdateURL();
+          if (canBroadcastP2P()) {
+            P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
+          }
+          if (previousFormula !== formulas[row][col]) {
+            scheduleDependencyDraw();
+          }
+        } else {
+          const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
+          data[row][col] = String(result);
+          target.innerText = String(result);
+          recalculateFormulas();
+          debouncedUpdateURL();
+          if (canBroadcastP2P()) {
+            P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
+          }
+          if (previousFormula !== formulas[row][col]) {
+            scheduleDependencyDraw();
+          }
         }
 
         // Exit formula edit mode
         formulaEditMode = false;
         formulaEditCell = null;
       }
+
+      const sparklineValue = data[row] ? data[row][col] : rawValue;
+      updateSparklineForCellElement(target, sparklineValue, formulas[row] ? formulas[row][col] : "");
 
       // Try to move to cell below
       const nextRow = row + 1;
@@ -1100,6 +1438,9 @@ import {
     P2PManager.init({
       p2pUI,
       remoteCursorClass: REMOTE_CURSOR_CLASS,
+      onPeerReady: (id) => {
+        registerLocalPeer(id);
+      },
       onHostReady: (id) => {
         if (p2pUI.myIdInput) {
           p2pUI.myIdInput.value = id;
@@ -1114,8 +1455,11 @@ import {
       onRemoteCellUpdate: handleRemoteCellUpdate,
       onRemoteCursorMove: handleRemoteCursor,
       onSyncRequest: handleSyncRequest,
+      onPeerHello: handlePeerHello,
+      onPeerActivity: handlePeerActivity,
       onConnectionClosed: handleP2PDisconnect,
       onConnectionError: () => {
+        clearPresence();
         P2PManager.resetControls();
         P2PManager.setStatus("Connection error.");
       },
@@ -1261,6 +1605,7 @@ import {
 
     // Global mouseup to catch drag ending outside container
     document.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("keydown", handleZenModeShortcut);
 
     // Format button event listeners
     const boldBtn = document.getElementById("format-bold");
@@ -1337,6 +1682,8 @@ import {
     const addColBtn = document.getElementById("add-col");
     const clearBtn = document.getElementById("clear-spreadsheet");
     const themeToggleBtn = document.getElementById("theme-toggle");
+    const toggleZenBtn = document.getElementById("toggle-zen");
+    const zenFloatBtn = document.getElementById("zen-float-toggle");
     const copyUrlBtn = document.getElementById("copy-url");
     const importCsvBtn = document.getElementById("import-csv");
     const importCsvInput = document.getElementById("import-csv-file");
@@ -1370,6 +1717,12 @@ import {
     }
     if (themeToggleBtn) {
       themeToggleBtn.addEventListener("click", () => ThemeManager.toggleTheme());
+    }
+    if (toggleZenBtn) {
+      toggleZenBtn.addEventListener("click", () => toggleZenMode());
+    }
+    if (zenFloatBtn) {
+      zenFloatBtn.addEventListener("click", () => toggleZenMode());
     }
     if (copyUrlBtn) {
       copyUrlBtn.addEventListener("click", () => QRCodeManager.copyURL());
@@ -1516,6 +1869,7 @@ import {
     p2pUI.statusEl = document.getElementById("p2p-status");
     p2pUI.myIdInput = document.getElementById("p2p-my-id");
     p2pUI.remoteIdInput = document.getElementById("p2p-remote-id");
+    presenceStackEl = document.getElementById("presence-stack");
     const p2pCloseBtn = document.getElementById("p2p-close-btn");
     const p2pBackdrop = document.querySelector("#p2p-modal .modal-backdrop");
 
@@ -1598,6 +1952,68 @@ import {
         }
       });
     }
+
+    CommandPaletteManager.init({
+      isDarkMode: () => ThemeManager.isDarkMode(),
+      toggleTheme: () => ThemeManager.toggleTheme(),
+      clearSpreadsheet: () => {
+        clearSpreadsheet();
+        scheduleFullSync();
+        refreshDependencyLayer();
+      },
+      recalculateFormulas,
+      updateURL,
+      showToast,
+      openCsvImport: () => {
+        if (importCsvInput) importCsvInput.click();
+      },
+      exportCSV: () => CSVManager.downloadCSV(),
+      exportExcel: () => ExcelManager.downloadExcel(),
+      openJSONModal: () => JSONManager.openModal(),
+      openHashTool: () => HashToolManager.openModal(),
+      copyLink: () => QRCodeManager.copyURL(),
+      showQRModal: () => QRCodeManager.showQRModal(),
+      showEmbedModal: () => UIModeManager.showEmbedModal(),
+      openTemplateGallery: () => TemplateManager.openGallery(),
+      startPresentation: () => {
+        if (presentBtn) presentBtn.click();
+      },
+      toggleReadOnly: () => UIModeManager.toggleReadOnlyMode(),
+      isReadOnly: () => isReadOnly,
+      toggleZen: () => toggleZenMode(),
+      isZen: () => isZenMode,
+      toggleDependencies: () => {
+        if (traceDepsBtn) traceDepsBtn.click();
+      },
+      openP2PModal: () => {
+        if (p2pUI.modal) p2pUI.modal.classList.remove("hidden");
+      },
+      startP2PHost: () => {
+        if (p2pUI.modal) p2pUI.modal.classList.remove("hidden");
+        if (p2pUI.startHostBtn) p2pUI.startHostBtn.click();
+      },
+      focusP2PJoin: () => {
+        if (p2pUI.modal) p2pUI.modal.classList.remove("hidden");
+        if (p2pUI.remoteIdInput) {
+          p2pUI.remoteIdInput.focus();
+          p2pUI.remoteIdInput.select();
+        }
+      },
+      copyP2PId: () => {
+        if (p2pUI.copyIdBtn) p2pUI.copyIdBtn.click();
+      },
+      getP2PId: () => (p2pUI.myIdInput ? p2pUI.myIdInput.value.trim() : ""),
+      openPasswordModal: () => PasswordManager.handleLockButtonClick(),
+      openGitHub: () => {
+        const githubLink = document.querySelector(".github-link");
+        if (githubLink) {
+          githubLink.click();
+          return;
+        }
+        window.open("https://github.com/supunlakmal/spreadsheet", "_blank", "noopener");
+      },
+      applyFormat: (format) => CellFormattingManager.applyFormat(format),
+    });
 
     // Handle browser back/forward
     window.addEventListener("hashchange", function () {
