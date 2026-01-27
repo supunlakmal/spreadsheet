@@ -13,6 +13,7 @@ import { HashToolManager } from "./modules/hashToolManager.js";
 import { P2PManager } from "./modules/p2pManager.js";
 import { PresentationManager } from "./modules/presentationManager.js";
 import { TemplateManager } from "./modules/templateManager.js";
+import { CommandPaletteManager } from "./modules/commandPaletteManager.js";
 import { ThemeManager } from "./modules/themeManager.js";
 import { UIModeManager } from "./modules/uiModeManager.js";
 import { QRCodeManager } from "./modules/qrCodeManager.js";
@@ -1598,6 +1599,66 @@ import {
         }
       });
     }
+
+    CommandPaletteManager.init({
+      isDarkMode: () => ThemeManager.isDarkMode(),
+      toggleTheme: () => ThemeManager.toggleTheme(),
+      clearSpreadsheet: () => {
+        clearSpreadsheet();
+        scheduleFullSync();
+        refreshDependencyLayer();
+      },
+      recalculateFormulas,
+      updateURL,
+      showToast,
+      openCsvImport: () => {
+        if (importCsvInput) importCsvInput.click();
+      },
+      exportCSV: () => CSVManager.downloadCSV(),
+      exportExcel: () => ExcelManager.downloadExcel(),
+      openJSONModal: () => JSONManager.openModal(),
+      openHashTool: () => HashToolManager.openModal(),
+      copyLink: () => QRCodeManager.copyURL(),
+      showQRModal: () => QRCodeManager.showQRModal(),
+      showEmbedModal: () => UIModeManager.showEmbedModal(),
+      openTemplateGallery: () => TemplateManager.openGallery(),
+      startPresentation: () => {
+        if (presentBtn) presentBtn.click();
+      },
+      toggleReadOnly: () => UIModeManager.toggleReadOnlyMode(),
+      isReadOnly: () => isReadOnly,
+      toggleDependencies: () => {
+        if (traceDepsBtn) traceDepsBtn.click();
+      },
+      openP2PModal: () => {
+        if (p2pUI.modal) p2pUI.modal.classList.remove("hidden");
+      },
+      startP2PHost: () => {
+        if (p2pUI.modal) p2pUI.modal.classList.remove("hidden");
+        if (p2pUI.startHostBtn) p2pUI.startHostBtn.click();
+      },
+      focusP2PJoin: () => {
+        if (p2pUI.modal) p2pUI.modal.classList.remove("hidden");
+        if (p2pUI.remoteIdInput) {
+          p2pUI.remoteIdInput.focus();
+          p2pUI.remoteIdInput.select();
+        }
+      },
+      copyP2PId: () => {
+        if (p2pUI.copyIdBtn) p2pUI.copyIdBtn.click();
+      },
+      getP2PId: () => (p2pUI.myIdInput ? p2pUI.myIdInput.value.trim() : ""),
+      openPasswordModal: () => PasswordManager.handleLockButtonClick(),
+      openGitHub: () => {
+        const githubLink = document.querySelector(".github-link");
+        if (githubLink) {
+          githubLink.click();
+          return;
+        }
+        window.open("https://github.com/supunlakmal/spreadsheet", "_blank", "noopener");
+      },
+      applyFormat: (format) => CellFormattingManager.applyFormat(format),
+    });
 
     // Handle browser back/forward
     window.addEventListener("hashchange", function () {
