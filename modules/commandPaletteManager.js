@@ -28,6 +28,8 @@ const defaultCallbacks = {
   openPasswordModal: () => {},
   openGitHub: () => {},
   applyFormat: () => {},
+  toggleZen: () => {},
+  isZen: () => false,
 };
 
 const VISUAL_FORMULAS = [
@@ -38,6 +40,7 @@ const VISUAL_FORMULAS = [
 
 const SHORTCUTS = [
   { label: "Open command palette", keys: "Ctrl+K / Cmd+K" },
+  { label: "Zen mode", keys: "Alt+Z" },
   { label: "Bold", keys: "Ctrl+B" },
   { label: "Italic", keys: "Ctrl+I" },
   { label: "Underline", keys: "Ctrl+U" },
@@ -85,6 +88,16 @@ const ACTIONS = [
     keywords: ["read", "readonly", "view", "edit", "lock"],
     run: (ctx) => ctx.toggleReadOnly && ctx.toggleReadOnly(),
     isVisible: (ctx) => typeof ctx.toggleReadOnly === "function",
+  },
+  {
+    id: "toggle-zen",
+    category: "System",
+    order: 135,
+    getLabel: (ctx) => (ctx.isZen && ctx.isZen() ? "Disable Zen Mode" : "Enable Zen Mode"),
+    getIcon: (ctx) => (ctx.isZen && ctx.isZen() ? "fa-eye-slash" : "fa-eye"),
+    keywords: ["zen", "focus", "distraction", "mode"],
+    run: (ctx) => ctx.toggleZen && ctx.toggleZen(),
+    isVisible: (ctx) => typeof ctx.toggleZen === "function",
   },
   {
     id: "password-protect",

@@ -90,6 +90,9 @@ import {
   // Embed mode flag
   let isEmbedMode = false;
 
+  // Zen mode flag
+  let isZenMode = false;
+
   // Debounce timer
   let debounceTimer = null;
   let dependencyDrawQueued = false;
@@ -359,6 +362,35 @@ import {
   function refreshDependencyLayer() {
     DependencyTracer.init();
     scheduleDependencyDraw();
+  }
+
+  // ========== Zen Mode ==========
+  const ZEN_MODE_CLASS = "zen-mode";
+
+  function applyZenMode(enabled) {
+    isZenMode = enabled;
+    document.body.classList.toggle(ZEN_MODE_CLASS, enabled);
+
+    const toggleZenBtn = document.getElementById("toggle-zen");
+    if (toggleZenBtn) {
+      toggleZenBtn.classList.toggle("active", enabled);
+      toggleZenBtn.setAttribute("aria-pressed", enabled ? "true" : "false");
+      const icon = toggleZenBtn.querySelector("i");
+      if (icon) icon.className = enabled ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
+    }
+  }
+
+  function toggleZenMode() {
+    applyZenMode(!isZenMode);
+  }
+
+  function handleZenModeShortcut(event) {
+    if (event.defaultPrevented) return;
+    const key = event.key ? event.key.toLowerCase() : "";
+    if (event.altKey && !event.ctrlKey && !event.metaKey && key === "z") {
+      event.preventDefault();
+      toggleZenMode();
+    }
   }
   // Handle input changes
   function handleInput(event) {
@@ -1302,6 +1334,7 @@ import {
 
     // Global mouseup to catch drag ending outside container
     document.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("keydown", handleZenModeShortcut);
 
     // Format button event listeners
     const boldBtn = document.getElementById("format-bold");
@@ -1378,6 +1411,8 @@ import {
     const addColBtn = document.getElementById("add-col");
     const clearBtn = document.getElementById("clear-spreadsheet");
     const themeToggleBtn = document.getElementById("theme-toggle");
+    const toggleZenBtn = document.getElementById("toggle-zen");
+    const zenFloatBtn = document.getElementById("zen-float-toggle");
     const copyUrlBtn = document.getElementById("copy-url");
     const importCsvBtn = document.getElementById("import-csv");
     const importCsvInput = document.getElementById("import-csv-file");
@@ -1411,6 +1446,12 @@ import {
     }
     if (themeToggleBtn) {
       themeToggleBtn.addEventListener("click", () => ThemeManager.toggleTheme());
+    }
+    if (toggleZenBtn) {
+      toggleZenBtn.addEventListener("click", () => toggleZenMode());
+    }
+    if (zenFloatBtn) {
+      zenFloatBtn.addEventListener("click", () => toggleZenMode());
     }
     if (copyUrlBtn) {
       copyUrlBtn.addEventListener("click", () => QRCodeManager.copyURL());
@@ -1667,6 +1708,8 @@ import {
       },
       toggleReadOnly: () => UIModeManager.toggleReadOnlyMode(),
       isReadOnly: () => isReadOnly,
+      toggleZen: () => toggleZenMode(),
+      isZen: () => isZenMode,
       toggleDependencies: () => {
         if (traceDepsBtn) traceDepsBtn.click();
       },

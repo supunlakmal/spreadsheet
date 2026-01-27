@@ -125,7 +125,9 @@ body {
     border-bottom: 1px solid var(--border-color);
     gap: 16px;
     flex-shrink: 0;
-    transition: background-color 0.3s, border-color 0.3s;
+    max-height: 200px;
+    transition: background-color 0.3s, border-color 0.3s, max-height 0.25s ease, padding 0.25s ease, opacity 0.2s ease,
+        transform 0.25s ease;
 }
 
 .header h1 {
@@ -370,6 +372,11 @@ body {
     background: var(--accent-color) !important;
     color: white !important;
 }
+
+#toggle-zen.active {
+    background: var(--accent-color) !important;
+    color: white !important;
+}
 /* ========== End Read-only Mode Styles ========== */
 
 /* ========== Embed Mode Styles ========== */
@@ -393,6 +400,82 @@ body {
     height: 100vh;
 }
 /* ========== End Embed Mode Styles ========== */
+
+/* ========== Zen Mode Styles ========== */
+body.zen-mode .header {
+    max-height: 0;
+    padding: 0;
+    border-bottom-color: transparent;
+    opacity: 0;
+    transform: translateY(-12px);
+    pointer-events: none;
+    overflow: hidden;
+}
+
+body.zen-mode .toolbar,
+body.zen-mode .header h1,
+body.zen-mode .scroll-btn {
+    opacity: 0;
+    transform: translateY(-8px);
+    pointer-events: none;
+}
+
+.zen-float-toggle {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+    z-index: 90000;
+}
+
+body.zen-mode .zen-float-toggle {
+    opacity: 1;
+    pointer-events: auto;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.zen-float-toggle:hover {
+    color: var(--accent-color);
+    box-shadow: var(--shadow-md);
+}
+
+body.zen-mode.zen-row-focus .cell,
+body.zen-mode.zen-row-focus .header-cell.row-header {
+    opacity: 0.3;
+    transition: border-color 0.3s, background-color 0.3s, opacity 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+body.zen-mode .cell.active-row,
+body.zen-mode .header-cell.row-header.active-row {
+    opacity: 1;
+}
+
+body.zen-mode .cell.active-row {
+    box-shadow: inset 0 0 0 1px rgba(74, 144, 217, 0.2);
+}
+
+body.zen-mode .header-cell.row-header.active-row {
+    background-color: var(--bg-cell-focus);
+    color: var(--text-primary);
+    border-color: var(--accent-color);
+}
+/* ========== End Zen Mode Styles ========== */
 
 .size-control {
     display: inline-flex;

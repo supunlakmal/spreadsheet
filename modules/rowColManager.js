@@ -38,6 +38,8 @@ const state = {
 };
 
 const SPARKLINE_LAYER_CLASS = "sparkline-layer";
+const ACTIVE_ROW_CLASS = "active-row";
+const ZEN_ROW_FOCUS_CLASS = "zen-row-focus";
 
 function updateSparklineLayer(cell, cellContent, rawValue, formulaValue = "") {
   if (!cell || !cellContent) return;
@@ -155,6 +157,7 @@ export function renderGrid() {
   state.isSelecting = false;
   state.hoverRow = null;
   state.hoverCol = null;
+  clearActiveRowHighlight(state.activeRow);
   if (callbacks.onSelectionChange) {
     callbacks.onSelectionChange(null);
   }
@@ -269,11 +272,50 @@ export function renderGrid() {
   updateUI();
 }
 
+function clearActiveRowHighlight(row) {
+  if (row === null || row === undefined || Number.isNaN(row)) return;
+  const container = document.getElementById("spreadsheet");
+  if (!container) return;
+
+  container.querySelectorAll(`.cell-content[data-row="${row}"]`).forEach((cellContent) => {
+    if (cellContent.parentElement) {
+      cellContent.parentElement.classList.remove(ACTIVE_ROW_CLASS);
+    }
+  });
+
+  const rowHeader = container.querySelector(`.row-header[data-row="${row}"]`);
+  if (rowHeader) rowHeader.classList.remove(ACTIVE_ROW_CLASS);
+
+  if (document.body) {
+    document.body.classList.remove(ZEN_ROW_FOCUS_CLASS);
+  }
+}
+
+function setActiveRowHighlight(row) {
+  if (row === null || row === undefined || Number.isNaN(row)) return;
+  const container = document.getElementById("spreadsheet");
+  if (!container) return;
+
+  container.querySelectorAll(`.cell-content[data-row="${row}"]`).forEach((cellContent) => {
+    if (cellContent.parentElement) {
+      cellContent.parentElement.classList.add(ACTIVE_ROW_CLASS);
+    }
+  });
+
+  const rowHeader = container.querySelector(`.row-header[data-row="${row}"]`);
+  if (rowHeader) rowHeader.classList.add(ACTIVE_ROW_CLASS);
+
+  if (document.body) {
+    document.body.classList.add(ZEN_ROW_FOCUS_CLASS);
+  }
+}
+
 // ========== Header Highlighting ==========
 export function clearActiveHeaders() {
   if (state.activeRow !== null) {
     const rowHeader = document.querySelector(`.row-header[data-row="${state.activeRow}"]`);
     if (rowHeader) rowHeader.classList.remove(ACTIVE_HEADER_CLASS);
+    clearActiveRowHighlight(state.activeRow);
   }
   if (state.activeCol !== null) {
     const colHeader = document.querySelector(`.col-header[data-col="${state.activeCol}"]`);
@@ -284,16 +326,20 @@ export function clearActiveHeaders() {
 }
 
 export function setActiveHeaders(row, col) {
-  if (state.activeRow === row && state.activeCol === col) return;
-  clearActiveHeaders();
-  state.activeRow = row;
-  state.activeCol = col;
+  const isSameTarget = state.activeRow === row && state.activeCol === col;
+  if (!isSameTarget) {
+    clearActiveHeaders();
+    state.activeRow = row;
+    state.activeCol = col;
+  }
 
   const rowHeader = document.querySelector(`.row-header[data-row="${row}"]`);
   if (rowHeader) rowHeader.classList.add(ACTIVE_HEADER_CLASS);
 
   const colHeader = document.querySelector(`.col-header[data-col="${col}"]`);
   if (colHeader) colHeader.classList.add(ACTIVE_HEADER_CLASS);
+
+  setActiveRowHighlight(row);
 }
 
 export function setActiveHeadersForRange(minRow, maxRow, minCol, maxCol) {
@@ -301,6 +347,7 @@ export function setActiveHeadersForRange(minRow, maxRow, minCol, maxCol) {
   document.querySelectorAll(`.${ACTIVE_HEADER_CLASS}`).forEach((el) => {
     el.classList.remove(ACTIVE_HEADER_CLASS);
   });
+  clearActiveRowHighlight(state.activeRow);
 
   // Highlight all row headers in range
   for (let r = minRow; r <= maxRow; r++) {
@@ -315,8 +362,11 @@ export function setActiveHeadersForRange(minRow, maxRow, minCol, maxCol) {
   }
 
   // Update active row/col tracking
-  state.activeRow = minRow;
-  state.activeCol = minCol;
+  const activeRow = state.selectionEnd ? state.selectionEnd.row : minRow;
+  const activeCol = state.selectionEnd ? state.selectionEnd.col : minCol;
+  state.activeRow = activeRow;
+  state.activeCol = activeCol;
+  setActiveRowHighlight(activeRow);
 }
 
 // ========== Selection Functions ==========
