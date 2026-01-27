@@ -1,2132 +1,869 @@
-// Dynamic Spreadsheet Web App
-// Data persists in URL hash for easy sharing
-
-// Import constants from ES6 module
-import { DEBOUNCE_DELAY, DEFAULT_COLS, DEFAULT_ROWS, MAX_COLS, MAX_ROWS } from "./modules/constants.js";
-import { buildRangeRef, FormulaDropdownManager, FormulaEvaluator, isValidFormula, isVisualFormula } from "./modules/formulaManager.js";
-import { DependencyTracer } from "./modules/dependencyTracer.js";
-import { PasswordManager } from "./modules/passwordManager.js";
-import { CSVManager } from "./modules/csvManager.js";
-import { JSONManager } from "./modules/jsonManager.js";
-import { ExcelManager } from "./modules/excelManager.js";
-import { HashToolManager } from "./modules/hashToolManager.js";
-import { P2PManager } from "./modules/p2pManager.js";
-import { PresentationManager } from "./modules/presentationManager.js";
-import { TemplateManager } from "./modules/templateManager.js";
-import { CommandPaletteManager } from "./modules/commandPaletteManager.js";
-import { ThemeManager } from "./modules/themeManager.js";
-import { UIModeManager } from "./modules/uiModeManager.js";
-import { QRCodeManager } from "./modules/qrCodeManager.js";
-import { CellFormattingManager } from "./modules/cellFormattingManager.js";
-import { SelectionStatusManager } from "./modules/selectionStatusManager.js";
-import { getSparklineDisplayText } from "./modules/visualFunctions.js";
+import { readStateFromHash, writeStateToHash, isEncryptedHash } from "./hashcal/modules/urlManager.js";
+import { expandEvents } from "./hashcal/modules/recurrenceEngine.js";
 import {
-  addColumn,
-  addRow,
-  clearActiveHeaders,
-  clearSelectedCells,
-  clearSelection,
-  clearSpreadsheet,
-  focusCellAt,
-  getCellContentElement,
-  getCellElement,
-  getSelectionBounds,
-  getState,
-  handleMouseDown,
-  handleMouseLeave,
-  handleMouseMove,
-  handleMouseUp,
-  handleResizeStart,
-  handleTouchEnd,
-  handleTouchMove,
-  handleTouchStart,
-  hasMultiSelection,
-  renderGrid,
-  setActiveHeaders,
-  setCallbacks,
-  setState,
-  updateSparklineForCellElement,
-  updateSelectionVisuals,
-  insertRowAt,
-  insertColumnAt,
-} from "./modules/rowColManager.js";
-import { escapeHTML, isValidCSSColor, sanitizeHTML } from "./modules/security.js";
-import { showToast } from "./modules/toastManager.js";
-import {
-  createDefaultColumnWidths,
-  createDefaultRowHeights,
-  createEmptyCellStyle,
-  createEmptyCellStyles,
-  createEmptyData,
-  isCellStylesDefault,
-  isColWidthsDefault,
-  isDataEmpty,
-  isFormulasEmpty,
-  isRowHeightsDefault,
-  normalizeAlignment,
-  normalizeCellStyles,
-  normalizeColumnWidths,
-  normalizeFontSize,
-  normalizeRowHeights,
-  minifyStateForExport,
-  URLManager,
-  validateAndNormalizeState,
-} from "./modules/urlManager.js";
+  formatDateKey,
+  getMonthGridRange,
+  getWeekRange,
+  renderCalendar,
+  renderTimeGrid,
+  renderWeekdayHeaders,
+  renderYearView,
+} from "./hashcal/modules/calendarRender.js";
+import { parseIcs } from "./hashcal/modules/icsImporter.js";
 
-(function () {
-  "use strict";
-  // Data model - dynamic 2D array (rows/cols managed by rowColManager)
-  let data = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
+const DEFAULT_COLORS = ["#ff6b6b", "#ffd43b", "#4dabf7", "#63e6be", "#9775fa"];
+const DEFAULT_STATE = {
+  t: "HashCal",
+  c: DEFAULT_COLORS,
+  e: [],
+  s: {
+    d: 0,
+    m: 0,
+  },
+};
 
-  // Formula storage - parallel array to data
-  let formulas = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
+const DEBOUNCE_MS = 500;
+const MAX_TITLE_LENGTH = 60;
 
-  // Cell styles - alignment, colors, and font size
-  let cellStyles = createEmptyCellStyles(DEFAULT_ROWS, DEFAULT_COLS);
+let state = cloneState(DEFAULT_STATE);
+let viewDate = startOfDay(new Date());
+let selectedDate = startOfDay(new Date());
+let currentView = "month";
+let password = null;
+let lockState = { encrypted: false, unlocked: true };
+let saveTimer = null;
+let occurrencesByDay = new Map();
+let editingIndex = null;
+let passwordResolver = null;
+let passwordMode = "unlock";
 
-  // Read-only mode flag
-  let isReadOnly = false;
+const ui = {};
 
-  // Embed mode flag
-  let isEmbedMode = false;
+function cloneState(source) {
+  return JSON.parse(JSON.stringify(source));
+}
 
-  // Zen mode flag
-  let isZenMode = false;
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
 
-  // Debounce timer
-  let debounceTimer = null;
-  let dependencyDrawQueued = false;
+function addDays(date, days) {
+  const next = new Date(date.getTime());
+  next.setDate(next.getDate() + days);
+  return next;
+}
 
-  // Formula range selection mode (for clicking to select ranges like Google Sheets)
-  let formulaEditMode = false; // true when typing a formula
-  let formulaEditCell = null; // { row, col, element } of cell being edited
-  let formulaRangeStart = null; // Start of range being selected
-  let formulaRangeEnd = null; // End of range being selected
-  let editingCell = null; // { row, col } when editing a cell's text
+function formatMonthLabel(date) {
+  return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
 
-  // P2P collaboration state
-  let isRemoteUpdate = false;
-  let hasInitialSync = false;
-  let fullSyncTimer = null;
-  const FULL_SYNC_DELAY = 300;
-  const REMOTE_CURSOR_CLASS = "remote-active";
-  const LEGACY_REMOTE_ID = "remote-peer";
-  const PEER_ACTIVITY_THROTTLE = 800;
-  const PEER_ACTIVITY_DECAY = 1600;
-  let presenceStackEl = null;
-  let lastActivitySentAt = 0;
-  let localPeerMeta = null;
-  const presencePeers = new Map();
-  const presenceActivityTimers = new Map();
+function formatDateLabel(date) {
+  return date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+}
 
-  const p2pUI = {
-    modal: null,
-    startHostBtn: null,
-    joinBtn: null,
-    copyIdBtn: null,
-    idDisplay: null,
-    statusEl: null,
-    myIdInput: null,
-    remoteIdInput: null,
-    startHostLabel: "",
-    joinLabel: "",
-  };
+function formatRangeLabel(start, end) {
+  const sameYear = start.getFullYear() === end.getFullYear();
+  const sameMonth = sameYear && start.getMonth() === end.getMonth();
+  if (sameMonth) {
+    return `${start.toLocaleDateString(undefined, {
+      month: "long",
+    })} ${start.getDate()}–${end.getDate()}, ${start.getFullYear()}`;
+  }
+  if (sameYear) {
+    return `${start.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    })} – ${end.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    })}, ${start.getFullYear()}`;
+  }
+  return `${start.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })} – ${end.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })}`;
+}
 
-  // Encryption state
-  // Encryption state handled by PasswordManager
+function formatTime(date) {
+  return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
 
-  // Toast functions moved to modules/toastManager.js
+function normalizeState(raw) {
+  const next = cloneState(DEFAULT_STATE);
+  if (!raw || typeof raw !== "object") return next;
 
-  // Create empty data array with specified dimensions
-  // Factory functions moved to modules/urlManager.js
-
-  // ========== Security Functions ==========
-
-  // Security Functions moved to modules/security.js
-
-  // Insert text at current cursor position in contentEditable
-  function insertTextAtCursor(text) {
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return;
-
-    const range = selection.getRangeAt(0);
-    range.deleteContents();
-
-    const textNode = document.createTextNode(text);
-    range.insertNode(textNode);
-
-    // Move cursor after inserted text
-    range.setStartAfter(textNode);
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
+  if (typeof raw.t === "string") {
+    next.t = raw.t.slice(0, MAX_TITLE_LENGTH);
   }
 
-  // Move caret to end of contentEditable element
-  function setCaretToEnd(element) {
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    range.collapse(false);
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
+  if (Array.isArray(raw.c) && raw.c.length) {
+    next.c = raw.c.filter((color) => typeof color === "string" && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color));
+    if (!next.c.length) next.c = DEFAULT_COLORS.slice();
   }
 
-  function applyFormulaSuggestion(formulaName) {
-    const target = formulaEditCell ? formulaEditCell.element : document.activeElement;
-    if (!target || !target.classList.contains("cell-content")) return;
-
-    const row = parseInt(target.dataset.row, 10);
-    const col = parseInt(target.dataset.col, 10);
-    if (isNaN(row) || isNaN(col)) return;
-
-    const newValue = `=${formulaName}(`;
-    target.innerText = newValue;
-    setCaretToEnd(target);
-
-    formulaEditMode = true;
-    formulaEditCell = { row, col, element: target };
-    formulas[row][col] = newValue;
-    data[row][col] = newValue;
-
-    FormulaDropdownManager.hide();
-    debouncedUpdateURL();
-    scheduleDependencyDraw();
+  if (Array.isArray(raw.e)) {
+    next.e = raw.e
+      .filter((entry) => Array.isArray(entry) && entry.length >= 4)
+      .map((entry) => {
+        const startMin = Number(entry[0]);
+        const duration = Math.max(0, Number(entry[1]) || 0);
+        const title = String(entry[2] || "Untitled").slice(0, 80);
+        const colorIndex = Math.max(0, Math.min(next.c.length - 1, Number(entry[3]) || 0));
+        const rule = ["d", "w", "m", "y"].includes(entry[4]) ? entry[4] : "";
+        const event = [startMin, duration, title, colorIndex];
+        if (rule) event.push(rule);
+        return event;
+      })
+      .filter((entry) => Number.isFinite(entry[0]));
   }
 
-  // ========== Formula Evaluation Functions ==========
-
-  // Get numeric value from cell (returns 0 for empty/non-numeric)
-  function getCellValue(row, col) {
-    const { rows, cols } = getState();
-    if (row < 0 || row >= rows || col < 0 || col >= cols) return 0;
-    const val = data[row][col];
-    if (!val || val === "") return 0;
-    // Strip HTML tags and parse
-    const stripped = String(val)
-      .replace(/<[^>]*>/g, "")
-      .trim();
-    const normalized = stripped.replace(/,/g, "");
-    const num = parseFloat(normalized);
-    return isNaN(num) ? 0 : num;
+  if (raw.s && typeof raw.s === "object") {
+    next.s.d = raw.s.d ? 1 : 0;
+    next.s.m = raw.s.m ? 1 : 0;
   }
 
-  // Recalculate all formula cells
-  function recalculateFormulas() {
-    const { rows, cols } = getState();
-    const container = document.getElementById("spreadsheet");
-    const activeElement = document.activeElement;
-    const maxPasses = rows * cols;
-    let needsUpdate = false;
-
-    // Multiple passes to propagate formulas that depend on other formulas.
-    for (let pass = 0; pass < maxPasses; pass++) {
-      let changed = false;
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const formula = formulas[r][c];
-          if (formula && formula.startsWith("=")) {
-            if (isVisualFormula(formula)) {
-              continue;
-            }
-            const result = String(FormulaEvaluator.evaluate(formula, { getCellValue, data, rows, cols }));
-            if (data[r][c] !== result) {
-              data[r][c] = result;
-              changed = true;
-              needsUpdate = true;
-            }
-          }
-        }
-      }
-      if (!changed) break;
-    }
-
-    if (!needsUpdate || !container) return;
-
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const formula = formulas[r][c];
-        if (formula && formula.startsWith("=")) {
-          const cellContent = container.querySelector(`.cell-content[data-row="${r}"][data-col="${c}"]`);
-          if (!cellContent) continue;
-
-          const isEditingFormula = cellContent === activeElement && cellContent.innerText.trim().startsWith("=");
-          if (!isEditingFormula) {
-            cellContent.innerText = data[r][c];
-            updateSparklineForCellElement(cellContent, data[r][c], formula);
-          }
-        }
-      }
-    }
-  }
-
-  // Normalization functions moved to modules/urlManager.js
-
-  function getDataArray() {
-    return data;
-  }
-
-  function setDataArray(newData) {
-    data = newData;
-  }
-
-  function getFormulasArray() {
-    return formulas;
-  }
-
-  function setFormulasArray(newFormulas) {
-    formulas = newFormulas;
-  }
-
-  function getCellStylesArray() {
-    return cellStyles;
-  }
-
-  function setCellStylesArray(newCellStyles) {
-    cellStyles = newCellStyles;
-  }
-
-  // Helper functions moved to modules/urlManager.js
-
-  // Minify state object keys for smaller URL payload
-  // State helpers moved to modules/urlManager.js
-
-  // ========== Serialization Codec (Wrapper for minify/expand + compression) ==========
-  // Handles state serialization without encryption concerns
-  // Codec, validation, and decode functions moved to modules/urlManager.js
-
-  // Build current state object (only includes non-empty/non-default values)
-  function buildCurrentState() {
-    const { rows, cols, colWidths, rowHeights } = getState();
-    const stateObj = {
-      rows,
-      cols,
-      theme: ThemeManager.isDarkMode() ? "dark" : "light",
-    };
-
-    // Only include readOnly if true (saves URL bytes)
-    if (isReadOnly || isEmbedMode) {
-      stateObj.readOnly = 1;
-    }
-
-    // Only include embed if true (saves URL bytes)
-    if (isEmbedMode) {
-      stateObj.embed = 1;
-    }
-
-    // Only include data if not all empty
-    if (!isDataEmpty(data)) {
-      stateObj.data = data;
-    }
-
-    // Only include formulas if any exist
-    if (!isFormulasEmpty(formulas)) {
-      stateObj.formulas = formulas;
-    }
-
-    // Only include cell styles if any are non-default
-    if (!isCellStylesDefault(cellStyles)) {
-      stateObj.cellStyles = cellStyles;
-    }
-
-    // Only include colWidths if not all default
-    if (!isColWidthsDefault(colWidths, cols)) {
-      stateObj.colWidths = colWidths;
-    }
-
-    // Only include rowHeights if not all default
-    if (!isRowHeightsDefault(rowHeights, rows)) {
-      stateObj.rowHeights = rowHeights;
-    }
-
-    return stateObj;
-  }
-
-  // Update URL hash without page jump
-  async function updateURL() {
-    const state = buildCurrentState();
-
-    await URLManager.updateURL(state, PasswordManager.getPassword());
-  }
-
-  // Debounced URL update
-  function debouncedUpdateURL() {
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
-    }
-    debounceTimer = setTimeout(updateURL, DEBOUNCE_DELAY);
-  }
-
-  function scheduleDependencyDraw() {
-    if (!DependencyTracer.isActive) return;
-    if (dependencyDrawQueued) return;
-    dependencyDrawQueued = true;
-    requestAnimationFrame(() => {
-      dependencyDrawQueued = false;
-      DependencyTracer.draw(getFormulasArray());
-    });
-  }
-
-  function refreshDependencyLayer() {
-    DependencyTracer.init();
-    scheduleDependencyDraw();
-  }
-
-  // ========== Zen Mode ==========
-  const ZEN_MODE_CLASS = "zen-mode";
-
-  function applyZenMode(enabled) {
-    isZenMode = enabled;
-    document.body.classList.toggle(ZEN_MODE_CLASS, enabled);
-
-    const toggleZenBtn = document.getElementById("toggle-zen");
-    if (toggleZenBtn) {
-      toggleZenBtn.classList.toggle("active", enabled);
-      toggleZenBtn.setAttribute("aria-pressed", enabled ? "true" : "false");
-      const icon = toggleZenBtn.querySelector("i");
-      if (icon) icon.className = enabled ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
-    }
-  }
-
-  function toggleZenMode() {
-    applyZenMode(!isZenMode);
-  }
-
-  function handleZenModeShortcut(event) {
-    if (event.defaultPrevented) return;
-    const key = event.key ? event.key.toLowerCase() : "";
-    if (event.altKey && !event.ctrlKey && !event.metaKey && key === "z") {
-      event.preventDefault();
-      toggleZenMode();
-    }
-  }
-  // Handle input changes
-  function handleInput(event) {
-    const target = event.target;
-    if (!target.classList.contains("cell-content")) return;
-
-    // GUARD: Block in read-only mode
-    if (isReadOnly) {
-      event.preventDefault();
-      target.blur();
-      return;
-    }
-
-    const row = parseInt(target.dataset.row, 10);
-    const col = parseInt(target.dataset.col, 10);
-
-    // DON'T clear selection if in formula mode (user may be selecting range)
-    if (hasMultiSelection() && !formulaEditMode) {
-      clearSelection();
-      setActiveHeaders(row, col);
-    }
-
-    const { rows, cols } = getState();
-    if (!isNaN(row) && !isNaN(col) && row < rows && col < cols) {
-      setEditingCell(row, col);
-      const previousFormula = formulas[row] ? formulas[row][col] : "";
-      const rawValue = target.innerText.trim();
-
-      if (rawValue.startsWith("=")) {
-        // Enter formula edit mode
-        formulaEditMode = true;
-        formulaEditCell = { row, col, element: target };
-
-        // Store formula but DON'T evaluate during typing
-        formulas[row][col] = rawValue;
-        data[row][col] = rawValue;
-
-        FormulaDropdownManager.update(target, rawValue);
-      } else {
-        // Exit formula edit mode
-        formulaEditMode = false;
-        formulaEditCell = null;
-
-        // Regular value - clear any existing formula
-        formulas[row][col] = "";
-        data[row][col] = sanitizeHTML(target.innerHTML);
-
-        FormulaDropdownManager.hide();
-
-        // Recalculate dependent formulas when regular values change
-        recalculateFormulas();
-      }
-
-      debouncedUpdateURL();
-      if (canBroadcastP2P()) {
-        P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
-      }
-      notifyLocalActivity(row, col);
-      SelectionStatusManager.updateStatusBar();
-      if (previousFormula !== formulas[row][col]) {
-        scheduleDependencyDraw();
-      }
-    }
-  }
-
-  // Selection and hover functions moved to modules/rowColManager.js
-
-  // Cell positioning functions moved to modules/rowColManager.js
-
-  function setEditingCell(row, col) {
-    editingCell = { row, col };
-  }
-
-  function clearEditingCell() {
-    editingCell = null;
-  }
-
-  function isEditingCell(row, col) {
-    return !!(editingCell && editingCell.row === row && editingCell.col === col);
-  }
-
-  function handleFocusIn(event) {
-    const target = event.target;
-    if (!target.classList.contains("cell-content")) return;
-
-    const row = parseInt(target.dataset.row, 10);
-    const col = parseInt(target.dataset.col, 10);
-
-    if (isNaN(row) || isNaN(col)) return;
-
-    // If we have a multi-selection and focus moves to a cell outside it, clear selection
-    if (hasMultiSelection()) {
-      const bounds = getSelectionBounds();
-      if (bounds && (row < bounds.minRow || row > bounds.maxRow || col < bounds.minCol || col > bounds.maxCol)) {
-        clearSelection();
-      }
-    }
-
-    // Update header highlighting for single cell focus (if no multi-selection)
-    if (!hasMultiSelection()) {
-      setActiveHeaders(row, col);
-    }
-
-    // Show formula text when focused (for editing)
-    if (formulas[row][col] && formulas[row][col].startsWith("=")) {
-      target.innerText = formulas[row][col];
-    }
-
-    if (canBroadcastP2P()) {
-      const cursorColor = localPeerMeta ? localPeerMeta.color : "#ff0055";
-      P2PManager.broadcastCursor(row, col, cursorColor);
-    }
-  }
-
-  function handleFocusOut(event) {
-    const target = event.target;
-    if (!target.classList.contains("cell-content")) return;
-
-    FormulaDropdownManager.hide();
-
-    const row = parseInt(target.dataset.row, 10);
-    const col = parseInt(target.dataset.col, 10);
-
-    // If we're in formula edit mode and currently selecting a range, don't process blur
-    const { isSelecting, rows, cols } = getState();
-    if (formulaEditMode && isSelecting) {
-      return;
-    }
-
-    if (!isNaN(row) && !isNaN(col)) {
-      notifyLocalActivityEnd(row, col);
-    }
-
-    // Evaluate formula when blurred
-    if (!isNaN(row) && !isNaN(col)) {
-      const rawValue = target.innerText.trim();
-      const previousFormula = formulas[row] ? formulas[row][col] : "";
-
-      if (rawValue.startsWith("=")) {
-        // NOW evaluate the formula
-        formulas[row][col] = rawValue;
-        const sparklineDisplay = getSparklineDisplayText(rawValue);
-        if (sparklineDisplay) {
-          data[row][col] = sparklineDisplay;
-          target.innerText = sparklineDisplay;
-          debouncedUpdateURL();
-          SelectionStatusManager.updateStatusBar();
-          if (canBroadcastP2P()) {
-            P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
-          }
-          if (previousFormula !== formulas[row][col]) {
-            scheduleDependencyDraw();
-          }
-        } else {
-          const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
-          data[row][col] = String(result);
-          target.innerText = String(result);
-
-          // Recalculate all dependent formulas
-          recalculateFormulas();
-          debouncedUpdateURL();
-          SelectionStatusManager.updateStatusBar();
-          if (canBroadcastP2P()) {
-            P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
-          }
-          if (previousFormula !== formulas[row][col]) {
-            scheduleDependencyDraw();
-          }
-        }
-      }
-
-      const sparklineValue = data[row] ? data[row][col] : rawValue;
-      updateSparklineForCellElement(target, sparklineValue, formulas[row] ? formulas[row][col] : "");
-    }
-
-    // Exit formula edit mode when focus truly leaves
-    clearEditingCell();
-    formulaEditMode = false;
-    formulaEditCell = null;
-    formulaRangeStart = null;
-    formulaRangeEnd = null;
-
-    const container = document.getElementById("spreadsheet");
-    if (!container) return;
-
-    const next = event.relatedTarget;
-    if (next && container.contains(next)) {
-      return;
-    }
-
-    clearActiveHeaders();
-  }
-
-  function stringToColor(str) {
-    if (!str) return "#888888";
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const hex = (hash & 0x00ffffff).toString(16).toUpperCase().padStart(6, "0");
-    return `#${hex}`;
-  }
-
-  function buildInitials(label) {
-    if (!label) return "??";
-    const cleaned = String(label).replace(/[^a-zA-Z0-9]/g, "");
-    if (!cleaned) return "??";
-    if (cleaned.length === 1) return `${cleaned}${cleaned}`.toUpperCase();
-    return cleaned.slice(0, 2).toUpperCase();
-  }
-
-  function buildPeerMeta({ peerId, name, isLocal = false } = {}) {
-    const resolvedId = peerId || LEGACY_REMOTE_ID;
-    const displayName = name || resolvedId;
-    return {
-      id: resolvedId,
-      name: displayName,
-      color: stringToColor(resolvedId),
-      initials: buildInitials(displayName),
-      isLocal,
-    };
-  }
-
-  function ensurePresenceStack() {
-    if (!presenceStackEl) {
-      presenceStackEl = document.getElementById("presence-stack");
-    }
-    return presenceStackEl;
-  }
-
-  function upsertPeer(peerMeta) {
-    const stack = ensurePresenceStack();
-    if (!stack || !peerMeta || !peerMeta.id) return;
-
-    const existing = presencePeers.get(peerMeta.id);
-    if (existing) {
-      existing.name = peerMeta.name || existing.name;
-      existing.color = peerMeta.color || existing.color;
-      existing.initials = peerMeta.initials || existing.initials;
-      if (typeof peerMeta.isLocal === "boolean") {
-        existing.isLocal = peerMeta.isLocal;
-      }
-      if (existing.el) {
-        existing.el.style.setProperty("--peer-color", existing.color);
-        existing.el.textContent = existing.initials;
-        existing.el.title = existing.name;
-        existing.el.setAttribute("aria-label", existing.name);
-        existing.el.classList.toggle("is-local", !!existing.isLocal);
-        existing.el.style.order = existing.isLocal ? "0" : "1";
-      }
-      return;
-    }
-
-    const avatar = document.createElement("div");
-    avatar.className = "presence-avatar is-entering";
-    avatar.dataset.peerId = peerMeta.id;
-    avatar.style.setProperty("--peer-color", peerMeta.color);
-    avatar.textContent = peerMeta.initials;
-    avatar.title = peerMeta.name;
-    avatar.setAttribute("aria-label", peerMeta.name);
-    avatar.setAttribute("role", "listitem");
-    avatar.style.order = peerMeta.isLocal ? "0" : "1";
-    if (peerMeta.isLocal) {
-      avatar.classList.add("is-local");
-    }
-    avatar.addEventListener(
-      "animationend",
-      () => {
-        avatar.classList.remove("is-entering");
-      },
-      { once: true }
-    );
-    stack.appendChild(avatar);
-
-    presencePeers.set(peerMeta.id, {
-      ...peerMeta,
-      el: avatar,
-      isActive: false,
-    });
-  }
-
-  function removePeer(peerId) {
-    const peer = presencePeers.get(peerId);
-    if (!peer) return;
-
-    if (peer.el) {
-      peer.el.classList.add("is-leaving");
-      peer.el.addEventListener(
-        "animationend",
-        () => {
-          if (peer.el && peer.el.parentNode) {
-            peer.el.parentNode.removeChild(peer.el);
-          }
-        },
-        { once: true }
-      );
-    }
-
-    presencePeers.delete(peerId);
-    if (presenceActivityTimers.has(peerId)) {
-      clearTimeout(presenceActivityTimers.get(peerId));
-      presenceActivityTimers.delete(peerId);
-    }
-  }
-
-  function clearPresence() {
-    presencePeers.forEach((peer) => {
-      if (peer.el && peer.el.parentNode) {
-        peer.el.parentNode.removeChild(peer.el);
-      }
-    });
-    presencePeers.clear();
-    presenceActivityTimers.forEach((timer) => clearTimeout(timer));
-    presenceActivityTimers.clear();
-    localPeerMeta = null;
-    lastActivitySentAt = 0;
-  }
-
-  function removeRemotePeers() {
-    presencePeers.forEach((peer, peerId) => {
-      if (!peer.isLocal) {
-        removePeer(peerId);
-      }
-    });
-  }
-
-  function setPeerActive(peerId, active, { decay = false } = {}) {
-    const peer = presencePeers.get(peerId);
-    if (!peer || !peer.el) return;
-
-    if (active) {
-      peer.el.classList.add("is-active");
-    } else {
-      peer.el.classList.remove("is-active");
-    }
-
-    if (presenceActivityTimers.has(peerId)) {
-      clearTimeout(presenceActivityTimers.get(peerId));
-      presenceActivityTimers.delete(peerId);
-    }
-
-    if (active && decay) {
-      const timer = setTimeout(() => {
-        setPeerActive(peerId, false);
-      }, PEER_ACTIVITY_DECAY);
-      presenceActivityTimers.set(peerId, timer);
-    }
-  }
-
-  function markPeerActivity(peerId) {
-    const resolvedId = peerId || LEGACY_REMOTE_ID;
-    if (!presencePeers.has(resolvedId)) {
-      upsertPeer(buildPeerMeta({ peerId: resolvedId }));
-    }
-    setPeerActive(resolvedId, true, { decay: true });
-  }
-
-  function registerLocalPeer(peerId) {
-    if (!peerId) return;
-    if (localPeerMeta && localPeerMeta.id !== peerId) {
-      clearPresence();
-    }
-    localPeerMeta = buildPeerMeta({ peerId, name: peerId, isLocal: true });
-    upsertPeer(localPeerMeta);
-  }
-
-  function sendPeerHello() {
-    if (!P2PManager.canSend() || !P2PManager.myPeerId) return;
-    const displayName = localPeerMeta ? localPeerMeta.name : P2PManager.myPeerId;
-    P2PManager.sendPeerHello({ peerId: P2PManager.myPeerId, name: displayName });
-  }
-
-  function handlePeerHello({ peerId, name } = {}) {
-    if (!peerId) return;
-    const isLocal = peerId === P2PManager.myPeerId;
-    upsertPeer(buildPeerMeta({ peerId, name, isLocal }));
-  }
-
-  function handlePeerActivity({ peerId, active } = {}) {
-    const resolvedId = peerId || LEGACY_REMOTE_ID;
-    if (!presencePeers.has(resolvedId)) {
-      upsertPeer(buildPeerMeta({ peerId: resolvedId }));
-    }
-    if (active === false) {
-      setPeerActive(resolvedId, false);
-      return;
-    }
-    setPeerActive(resolvedId, true, { decay: true });
-  }
-
-  function notifyLocalActivity(row, col) {
-    const peerId = P2PManager.myPeerId;
-    if (!peerId) return;
-    if (!localPeerMeta) {
-      registerLocalPeer(peerId);
-    }
-    setPeerActive(peerId, true, { decay: true });
-
-    if (!P2PManager.canSend()) return;
-    const now = Date.now();
-    if (now - lastActivitySentAt < PEER_ACTIVITY_THROTTLE) return;
-    lastActivitySentAt = now;
-    P2PManager.sendPeerActivity({ peerId, active: true, row, col });
-  }
-
-  function notifyLocalActivityEnd(row, col) {
-    const peerId = P2PManager.myPeerId;
-    if (!peerId) return;
-    setPeerActive(peerId, false);
-    if (!P2PManager.canSend()) return;
-    P2PManager.sendPeerActivity({ peerId, active: false, row, col });
-  }
-
-  // ========== P2P Collaboration ==========
-
-  function canBroadcastP2P() {
-    if (isRemoteUpdate) return false;
-    if (!P2PManager.canSend()) return false;
-    if (!P2PManager.isHost && !hasInitialSync) return false;
-    return true;
-  }
-
-  function sendFullSyncNow() {
-    if (!canBroadcastP2P()) return;
-    recalculateFormulas();
-    const fullState = buildCurrentState();
-    P2PManager.sendFullSync(fullState);
-  }
-
-  function scheduleFullSync() {
-    if (!canBroadcastP2P()) return;
-    if (fullSyncTimer) {
-      clearTimeout(fullSyncTimer);
-    }
-    fullSyncTimer = setTimeout(() => {
-      sendFullSyncNow();
-    }, FULL_SYNC_DELAY);
-  }
-
-  function handleGridResize() {
-    scheduleFullSync();
-    scheduleDependencyDraw();
-  }
-
-  function handleP2PConnection(amIHost) {
-    hasInitialSync = amIHost;
-    if (P2PManager.myPeerId) {
-      registerLocalPeer(P2PManager.myPeerId);
-    }
-    sendPeerHello();
-    if (amIHost) {
-      recalculateFormulas();
-      const fullState = buildCurrentState();
-      P2PManager.sendInitialSync(fullState);
-      P2PManager.setStatus("Connected. You can now edit together.");
-      if (p2pUI.modal) {
-        p2pUI.modal.classList.add("hidden");
-      }
-    } else {
-      P2PManager.setStatus("Connected. Waiting for host data...");
-      showToast("Waiting for host data...", "info");
-    }
-  }
-
-  function handleInitialSync(remoteState) {
-    if (!remoteState) return;
-    isRemoteUpdate = true;
-    applyLoadedState(remoteState);
-    renderGrid();
-    DependencyTracer.init();
-    recalculateFormulas();
-    debouncedUpdateURL();
-    SelectionStatusManager.updateStatusBar();
-    scheduleDependencyDraw();
-    P2PManager.clearRemoteCursor();
-    isRemoteUpdate = false;
-    hasInitialSync = true;
-    P2PManager.setStatus("Synced with host.");
-    if (p2pUI.modal) {
-      p2pUI.modal.classList.add("hidden");
-    }
-    showToast("Synced with host!", "success");
-  }
-
-  function handleRemoteCellUpdate({ row, col, value, formula, senderId }) {
-    const rowIndex = parseInt(row, 10);
-    const colIndex = parseInt(col, 10);
-    if (isNaN(rowIndex) || isNaN(colIndex)) return;
-
-    const { rows, cols } = getState();
-    if (rowIndex < 0 || colIndex < 0 || rowIndex >= rows || colIndex >= cols) {
-      P2PManager.requestFullSync();
-      return;
-    }
-
-    const resolvedSenderId = senderId || LEGACY_REMOTE_ID;
-    if (resolvedSenderId) {
-      markPeerActivity(resolvedSenderId);
-    }
-
-    const rawValue = value === undefined || value === null ? "" : String(value);
-    const rawFormula = formula === undefined || formula === null ? "" : String(formula);
-    const previousFormula = formulas[rowIndex] ? formulas[rowIndex][colIndex] : "";
-    const safeValue = sanitizeHTML(rawValue);
-    const isFormulaCell = rawFormula.startsWith("=");
-    const isFormulaEdit = isFormulaCell && rawValue.trim().startsWith("=");
-
-    isRemoteUpdate = true;
-    data[rowIndex][colIndex] = isFormulaEdit ? rawFormula : safeValue;
-    formulas[rowIndex][colIndex] = rawFormula;
-
-    const cellContent = getCellContentElement(rowIndex, colIndex);
-    if (cellContent && document.activeElement !== cellContent) {
-      if (isFormulaEdit) {
-        cellContent.innerText = rawFormula;
-      } else {
-        cellContent.innerHTML = safeValue;
-      }
-      updateSparklineForCellElement(cellContent, data[rowIndex][colIndex], formulas[rowIndex][colIndex]);
-    }
-
-    if (!isFormulaEdit) {
-      recalculateFormulas();
-    }
-
-    debouncedUpdateURL();
-    if (previousFormula !== formulas[rowIndex][colIndex]) {
-      scheduleDependencyDraw();
-    }
-    isRemoteUpdate = false;
-  }
-
-  function handleRemoteCursor({ row, col, senderId, color }) {
-    const rowIndex = parseInt(row, 10);
-    const colIndex = parseInt(col, 10);
-    if (isNaN(rowIndex) || isNaN(colIndex)) return;
-
-    const { rows, cols } = getState();
-    if (rowIndex < 0 || colIndex < 0 || rowIndex >= rows || colIndex >= cols) return;
-
-    const resolvedSenderId = senderId || LEGACY_REMOTE_ID;
-    if (!presencePeers.has(resolvedSenderId)) {
-      const meta = buildPeerMeta({ peerId: resolvedSenderId });
-      if (!senderId && isValidCSSColor(color)) {
-        meta.color = color;
-      }
-      upsertPeer(meta);
-    }
-    const peer = presencePeers.get(resolvedSenderId);
-
-    P2PManager.clearRemoteCursor();
-    const cell = getCellElement(rowIndex, colIndex);
-    if (cell) {
-      cell.classList.add(REMOTE_CURSOR_CLASS);
-      if (peer) {
-        cell.style.setProperty("--peer-color", peer.color);
-        cell.dataset.peer = peer.initials;
-      } else {
-        cell.dataset.peer = "PE";
-      }
-    }
-    markPeerActivity(resolvedSenderId);
-  }
-
-  function handleSyncRequest() {
-    if (!P2PManager.canSend()) return;
-    if (!hasInitialSync && !P2PManager.isHost) return;
-    sendFullSyncNow();
-  }
-
-  function handleP2PDisconnect() {
-    hasInitialSync = false;
-    P2PManager.clearRemoteCursor();
-    if (P2PManager.myPeerId) {
-      removeRemotePeers();
-    } else {
-      clearPresence();
-    }
-    P2PManager.resetControls();
-    P2PManager.setStatus("Disconnected.");
-    showToast("Peer disconnected", "warning");
-  }
-
-  // ========== Mouse Selection Handlers ==========
-
-  function handleCellDoubleClick(event) {
-    if (!(event.target instanceof Element)) return;
-
-    let cellContent = null;
-    if (event.target.classList.contains("cell-content")) {
-      cellContent = event.target;
-    } else if (event.target.classList.contains("cell")) {
-      cellContent = event.target.querySelector(".cell-content");
-    } else {
-      cellContent = event.target.closest(".cell-content");
-    }
-
-    if (!cellContent || !cellContent.classList.contains("cell-content")) return;
-
-    const row = parseInt(cellContent.dataset.row, 10);
-    const col = parseInt(cellContent.dataset.col, 10);
-
-    if (isNaN(row) || isNaN(col)) return;
-    setEditingCell(row, col);
-  }
-
-  // Mouse handlers moved to modules/rowColManager.js
-
-  function handleSelectionKeyDown(event) {
-    if (FormulaDropdownManager.isOpen()) {
-      if (event.key === "ArrowDown") {
-        FormulaDropdownManager.moveSelection(1);
-        event.preventDefault();
-        return;
-      }
-      if (event.key === "ArrowUp") {
-        FormulaDropdownManager.moveSelection(-1);
-        event.preventDefault();
-        return;
-      }
-      if (event.key === "Enter" || event.key === "Tab") {
-        const formulaName = FormulaDropdownManager.getActiveFormulaName();
-        if (formulaName) {
-          applyFormulaSuggestion(formulaName);
-        }
-        event.preventDefault();
-        return;
-      }
-      if (event.key === "Escape") {
-        FormulaDropdownManager.hide();
-        event.preventDefault();
-        return;
-      }
-    }
-
-    const state = getState();
-    const { rows, cols, selectionStart } = state;
-
-    if (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight") {
-      const target = event.target;
-      if (target.classList.contains("cell-content") && !event.altKey && !event.ctrlKey && !event.metaKey) {
-        const row = parseInt(target.dataset.row, 10);
-        const col = parseInt(target.dataset.col, 10);
-
-        if (!isNaN(row) && !isNaN(col) && !formulaEditMode && !isEditingCell(row, col)) {
-          let nextRow = row;
-          let nextCol = col;
-
-          if (event.key === "ArrowUp") nextRow -= 1;
-          if (event.key === "ArrowDown") nextRow += 1;
-          if (event.key === "ArrowLeft") nextCol -= 1;
-          if (event.key === "ArrowRight") nextCol += 1;
-
-          nextRow = Math.max(0, Math.min(rows - 1, nextRow));
-          nextCol = Math.max(0, Math.min(cols - 1, nextCol));
-
-          event.preventDefault();
-
-          if (event.shiftKey) {
-            if (!selectionStart) {
-              setState("selectionStart", { row, col });
-            }
-            setState("selectionEnd", { row: nextRow, col: nextCol });
-          } else {
-            setState("selectionStart", { row: nextRow, col: nextCol });
-            setState("selectionEnd", { row: nextRow, col: nextCol });
-          }
-
-          updateSelectionVisuals();
-          focusCellAt(nextRow, nextCol);
-          return;
-        }
-      }
-    }
-
-    // Escape key clears selection
-    if (event.key === "Escape" && hasMultiSelection()) {
-      clearSelection();
-      event.preventDefault();
-      return;
-    }
-
-    // Ctrl+Shift+Arrow keys to insert rows/columns
-    if (event.ctrlKey && event.shiftKey) {
-      const target = event.target;
-      if (target.classList.contains("cell-content")) {
-        const row = parseInt(target.dataset.row, 10);
-        const col = parseInt(target.dataset.col, 10);
-
-        if (!isNaN(row) && !isNaN(col)) {
-          if (event.key === "ArrowDown") {
-            // Insert row below current
-            event.preventDefault();
-            insertRowAt(row + 1);
-            return;
-          }
-          if (event.key === "ArrowUp") {
-            // Insert row at current (shifting down)
-            event.preventDefault();
-            insertRowAt(row);
-            return;
-          }
-          if (event.key === "ArrowRight") {
-            // Insert column right
-            event.preventDefault();
-            insertColumnAt(col + 1);
-            return;
-          }
-          if (event.key === "ArrowLeft") {
-            // Insert column left
-            event.preventDefault();
-            insertColumnAt(col);
-            return;
-          }
-        }
-      }
-    }
-
-    // Delete/Backspace key clears selected cells
-    if (event.key === "Delete" || event.key === "Backspace") {
-      const activeElement = document.activeElement;
-      const isEditingContent = activeElement && activeElement.classList.contains("cell-content") && activeElement.innerText.length > 0;
-
-      // Clear all cells if multi-selection, or clear single cell if not actively editing
-      if (hasMultiSelection() || !isEditingContent) {
-        event.preventDefault();
-        clearSelectedCells();
-        return;
-      }
-    }
-
-    // Enter key: evaluate formula / move to cell below
-    if (event.key === "Enter") {
-      const target = event.target;
-      if (!target.classList.contains("cell-content")) return;
-
-      const row = parseInt(target.dataset.row, 10);
-      const col = parseInt(target.dataset.col, 10);
-
-      if (isNaN(row) || isNaN(col)) return;
-
-      // Prevent default newline behavior
-      event.preventDefault();
-      clearEditingCell();
-
-      // Check if this is a formula cell - evaluate it
-      const rawValue = target.innerText.trim();
-      if (rawValue.startsWith("=")) {
-        const previousFormula = formulas[row] ? formulas[row][col] : "";
-        formulas[row][col] = rawValue;
-        const sparklineDisplay = getSparklineDisplayText(rawValue);
-        if (sparklineDisplay) {
-          data[row][col] = sparklineDisplay;
-          target.innerText = sparklineDisplay;
-          debouncedUpdateURL();
-          if (canBroadcastP2P()) {
-            P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
-          }
-          if (previousFormula !== formulas[row][col]) {
-            scheduleDependencyDraw();
-          }
-        } else {
-          const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
-          data[row][col] = String(result);
-          target.innerText = String(result);
-          recalculateFormulas();
-          debouncedUpdateURL();
-          if (canBroadcastP2P()) {
-            P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
-          }
-          if (previousFormula !== formulas[row][col]) {
-            scheduleDependencyDraw();
-          }
-        }
-
-        // Exit formula edit mode
-        formulaEditMode = false;
-        formulaEditCell = null;
-      }
-
-      const sparklineValue = data[row] ? data[row][col] : rawValue;
-      updateSparklineForCellElement(target, sparklineValue, formulas[row] ? formulas[row][col] : "");
-
-      // Try to move to cell below
-      const nextRow = row + 1;
-      if (nextRow < rows) {
-        // Focus cell below
-        const nextCell = document.querySelector(`.cell-content[data-row="${nextRow}"][data-col="${col}"]`);
-        if (nextCell) {
-          nextCell.focus();
-        }
-      } else {
-        // No row below - just blur current cell
-        target.blur();
-      }
-    }
-  }
-
-  // Resize and Touch handlers moved to modules/rowColManager.js
-
-  // Handle paste to strip unwanted HTML
-  function handlePaste(event) {
-    const target = event.target;
-    if (!target.classList.contains("cell-content")) return;
-
-    // GUARD: Block in read-only mode (silent)
-    if (isReadOnly) {
-      event.preventDefault();
-      return;
-    }
-
-    event.preventDefault();
-    const text = event.clipboardData.getData("text/plain");
-    document.execCommand("insertText", false, text);
-  }
-
-  // clearSpreadsheet, addRow, addColumn moved to modules/rowColManager.js
-
-  // Load state from URL on page load
-  // Returns true if data loaded successfully, false if waiting for password
-  function loadStateFromURL() {
-    const hash = window.location.hash.slice(1); // Remove #
-
-    if (hash) {
-      const loadedState = URLManager.decodeState(hash);
-      if (loadedState) {
-        // Check if data is encrypted
-        if (loadedState.encrypted) {
-          // delegate to PasswordManager
-          PasswordManager.handleEncryptedData(loadedState.data);
-
-          // Initialize with default state while waiting for password
-          setState("rows", DEFAULT_ROWS);
-          setState("cols", DEFAULT_COLS);
-          setState("colWidths", createDefaultColumnWidths(DEFAULT_COLS));
-          setState("rowHeights", createDefaultRowHeights(DEFAULT_ROWS));
-          data = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
-          cellStyles = createEmptyCellStyles(DEFAULT_ROWS, DEFAULT_COLS);
-          formulas = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
-          isReadOnly = false; // Default while waiting for decrypt
-          return false;
-        }
-
-        const loadedRows = loadedState.rows;
-        const loadedCols = loadedState.cols;
-        setState("rows", loadedRows);
-        setState("cols", loadedCols);
-        setState("colWidths", loadedState.colWidths || createDefaultColumnWidths(loadedCols));
-        setState("rowHeights", loadedState.rowHeights || createDefaultRowHeights(loadedRows));
-        data = loadedState.data;
-        formulas = loadedState.formulas || createEmptyData(loadedRows, loadedCols);
-        cellStyles = loadedState.cellStyles || createEmptyCellStyles(loadedRows, loadedCols);
-
-        // Apply theme from URL if present
-        if (loadedState.theme) {
-          ThemeManager.applyTheme(loadedState.theme);
-        }
-
-        // Load read-only mode
-        UIModeManager.applyReadOnlyState(loadedState.readOnly);
-
-        // Load embed mode
-        isEmbedMode = loadedState.embed || false;
-        if (isEmbedMode) {
-          UIModeManager.applyEmbedMode();
-        }
-
-        return true;
-      }
-    }
-
-    // Default state
-    setState("rows", DEFAULT_ROWS);
-    setState("cols", DEFAULT_COLS);
-    setState("colWidths", createDefaultColumnWidths(DEFAULT_COLS));
-    setState("rowHeights", createDefaultRowHeights(DEFAULT_ROWS));
-    data = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
-    cellStyles = createEmptyCellStyles(DEFAULT_ROWS, DEFAULT_COLS);
-    formulas = createEmptyData(DEFAULT_ROWS, DEFAULT_COLS);
-    isReadOnly = false;
-    isEmbedMode = false;
-    UIModeManager.clearReadOnlyMode();
-    UIModeManager.clearEmbedMode();
-    return true;
-  }
-
-  // ========== Password/Encryption Modal Functions ==========
-  // Handled by PasswordManager module
-
-  // Apply loaded state to variables
-  function applyLoadedState(loadedState) {
-    if (!loadedState) return;
-
-    const r = Math.min(Math.max(1, loadedState.rows || DEFAULT_ROWS), MAX_ROWS);
-    const c = Math.min(Math.max(1, loadedState.cols || DEFAULT_COLS), MAX_COLS);
-
-    setState("rows", r);
-    setState("cols", c);
-
-    // Process data array
-    let d = loadedState.data;
-    if (Array.isArray(d)) {
-      d = d.slice(0, r).map((row) => {
-        if (Array.isArray(row)) {
-          return row.slice(0, c).map((cell) => sanitizeHTML(String(cell || "")));
-        }
-        return Array(c).fill("");
-      });
-      while (d.length < r) d.push(Array(c).fill(""));
-      d = d.map((row) => {
-        while (row.length < c) row.push("");
-        return row;
-      });
-    } else {
-      d = createEmptyData(r, c);
-    }
-    data = d;
-
-    // Process formulas
-    let f = loadedState.formulas;
-    if (Array.isArray(f)) {
-      f = f.slice(0, r).map((row, rowIdx) => {
-        if (Array.isArray(row)) {
-          return row.slice(0, c).map((cell, colIdx) => {
-            const formula = String(cell || "");
-            if (formula.startsWith("=")) {
-              if (isValidFormula(formula)) {
-                return formula;
-              } else {
-                data[rowIdx][colIdx] = escapeHTML(formula);
-                return "";
-              }
-            }
-            return formula;
-          });
-        }
-        return Array(c).fill("");
-      });
-      while (f.length < r) f.push(Array(c).fill(""));
-      f = f.map((row) => {
-        while (row.length < c) row.push("");
-        return row;
-      });
-    } else {
-      f = createEmptyData(r, c);
-    }
-    formulas = f;
-
-    cellStyles = normalizeCellStyles(loadedState.cellStyles, r, c);
-    setState("colWidths", normalizeColumnWidths(loadedState.colWidths, c));
-    setState("rowHeights", normalizeRowHeights(loadedState.rowHeights, r));
-
-    if (loadedState.theme) {
-      ThemeManager.applyTheme(loadedState.theme);
-    }
-
-    isEmbedMode = Boolean(loadedState.embed);
-    if (isEmbedMode) {
-      UIModeManager.applyEmbedMode();
-    } else {
-      UIModeManager.clearEmbedMode();
-    }
-
-    // Apply read-only mode if present (embed mode forces read-only)
-    UIModeManager.applyReadOnlyState(loadedState.readOnly);
-  }
-
-  // Initialize the app
-  function init() {
-    // Set up callbacks for rowColManager module
-    setCallbacks({
-      debouncedUpdateURL,
-      recalculateFormulas,
-      getDataArray,
-      setDataArray,
-      getFormulasArray,
-      setFormulasArray,
-      getCellStylesArray,
-      setCellStylesArray,
-      PasswordManager,
-      getReadOnlyFlag: () => isReadOnly,
-      // Formula mode callbacks
-      getFormulaEditMode: () => formulaEditMode,
-      getFormulaEditCell: () => formulaEditCell,
-      setFormulaRangeStart: (val) => {
-        formulaRangeStart = val;
-      },
-      setFormulaRangeEnd: (val) => {
-        formulaRangeEnd = val;
-      },
-      getFormulaRangeStart: () => formulaRangeStart,
-      getFormulaRangeEnd: () => formulaRangeEnd,
-      buildRangeRef,
-      insertTextAtCursor,
-      FormulaDropdownManager,
-      onSelectionChange: (bounds) => SelectionStatusManager.updateStatusBar(bounds),
-      onGridResize: handleGridResize,
-      onFormulaChange: scheduleDependencyDraw,
-    });
-
-    CSVManager.init({
-      getState,
-      getDataArray,
-      setDataArray,
-      setFormulasArray,
-      setCellStylesArray,
-      setState,
-      renderGrid,
-      recalculateFormulas,
-      debouncedUpdateURL,
-      showToast,
-      extractPlainText: SelectionStatusManager.extractPlainText,
-      onImport: () => {
-        scheduleFullSync();
-        refreshDependencyLayer();
-      },
-    });
-
-    JSONManager.init({
-      buildCurrentState: () => minifyStateForExport(buildCurrentState()),
-      recalculateFormulas,
-      showToast,
-    });
-    HashToolManager.init({
-      showToast,
-    });
-    ExcelManager.init({
-      getState,
-      getDataArray,
-      getFormulasArray,
-      getCellStylesArray,
-      recalculateFormulas,
-      showToast,
-      extractPlainText: SelectionStatusManager.extractPlainText,
-    });
-
-    P2PManager.init({
-      p2pUI,
-      remoteCursorClass: REMOTE_CURSOR_CLASS,
-      onPeerReady: (id) => {
-        registerLocalPeer(id);
-      },
-      onHostReady: (id) => {
-        if (p2pUI.myIdInput) {
-          p2pUI.myIdInput.value = id;
-        }
-        if (p2pUI.idDisplay) {
-          p2pUI.idDisplay.classList.remove("hidden");
-        }
-        P2PManager.setStatus("Waiting for connection...");
-      },
-      onConnectionOpened: handleP2PConnection,
-      onInitialSync: handleInitialSync,
-      onRemoteCellUpdate: handleRemoteCellUpdate,
-      onRemoteCursorMove: handleRemoteCursor,
-      onSyncRequest: handleSyncRequest,
-      onPeerHello: handlePeerHello,
-      onPeerActivity: handlePeerActivity,
-      onConnectionClosed: handleP2PDisconnect,
-      onConnectionError: () => {
-        clearPresence();
-        P2PManager.resetControls();
-        P2PManager.setStatus("Connection error.");
-      },
-    });
-
-    // Initialize Theme Manager
-    ThemeManager.init({
-      debouncedUpdateURL,
-      scheduleFullSync,
-    });
-
-    // Initialize UI Mode Manager
-    UIModeManager.init({
-      buildCurrentState,
-      updateURL,
-      scheduleFullSync,
-      showToast,
-      URLManager,
-      PasswordManager,
-      getReadOnlyFlag: () => isReadOnly,
-      setReadOnlyFlag: (val) => {
-        isReadOnly = val;
-      },
-      getEmbedModeFlag: () => isEmbedMode,
-      setEmbedModeFlag: (val) => {
-        isEmbedMode = val;
-      },
-    });
-
-    // Initialize QR Code Manager
-    QRCodeManager.init({
-      recalculateFormulas,
-      updateURL,
-      showToast,
-    });
-
-    // Initialize Cell Formatting Manager
-    CellFormattingManager.init({
-      getSelectionBounds,
-      getCellContentElement,
-      getCellElement,
-      getCellStylesArray,
-      getDataArray,
-      getFormulasArray,
-      getState,
-      debouncedUpdateURL,
-      scheduleFullSync,
-      normalizeAlignment,
-      normalizeFontSize,
-      isValidCSSColor,
-      sanitizeHTML,
-      createEmptyCellStyle,
-      canBroadcastP2P,
-      P2PManager,
-    });
-
-    // Initialize Selection Status Manager
-    SelectionStatusManager.init({
-      getSelectionBounds,
-      getDataArray,
-      getEmbedModeFlag: () => isEmbedMode,
-    });
-
-    // Load theme preference first (before any rendering)
-    ThemeManager.loadTheme();
-
-    // Load any existing state from URL
-    loadStateFromURL();
-
-    // Recalculate after loading initial state
-    recalculateFormulas();
-
-    // Render the grid
-    renderGrid();
-
-    // Initialize Dependency Tracer layer
-    DependencyTracer.init();
-
-    // Initialize Formula Dropdown
-    FormulaDropdownManager.init(applyFormulaSuggestion);
-
-    // Initialize Password Manager
-    PasswordManager.init({
-      decryptAndDecode: URLManager.decryptAndDecode,
-      onDecryptSuccess: (state) => {
-        applyLoadedState(state);
-        recalculateFormulas(); // Recalculate after decryption
-        renderGrid();
-        DependencyTracer.init();
-        scheduleDependencyDraw();
-      },
-      updateURL: updateURL,
-      showToast: showToast,
-      validateState: validateAndNormalizeState,
-    });
-
-    PresentationManager.init();
-
-    // Initialize URL length indicator with current hash length
-    const currentHash = window.location.hash.slice(1);
-    URLManager.updateURLLengthIndicator(currentHash.length);
-
-    // Set up event delegation for input handling
-    const container = document.getElementById("spreadsheet");
-    if (container) {
-      container.addEventListener("input", handleInput);
-      container.addEventListener("focusin", handleFocusIn);
-      container.addEventListener("focusout", handleFocusOut);
-      container.addEventListener("paste", handlePaste);
-
-      // Selection mouse events
-      container.addEventListener("mousedown", handleResizeStart);
-      container.addEventListener("mousedown", handleMouseDown);
-      container.addEventListener("dblclick", handleCellDoubleClick);
-      container.addEventListener("mousemove", handleMouseMove);
-      container.addEventListener("mouseleave", handleMouseLeave);
-      container.addEventListener("mouseup", handleMouseUp);
-      container.addEventListener("keydown", handleSelectionKeyDown);
-      container.addEventListener("keyup", () => SelectionStatusManager.updateStatusBar());
-
-      // Touch events for mobile selection
-      container.addEventListener("touchstart", handleTouchStart, { passive: false });
-      container.addEventListener("touchmove", handleTouchMove, { passive: false });
-      container.addEventListener("touchend", handleTouchEnd);
-    }
-
-    const gridWrapper = document.querySelector(".grid-wrapper");
-    if (gridWrapper) {
-      gridWrapper.addEventListener("scroll", function () {
-        if (FormulaDropdownManager.isOpen() && FormulaDropdownManager.anchor) {
-          FormulaDropdownManager.position(FormulaDropdownManager.anchor);
-        }
-        scheduleDependencyDraw();
-      });
-    }
-
-    window.addEventListener("resize", function () {
-      if (FormulaDropdownManager.isOpen() && FormulaDropdownManager.anchor) {
-        FormulaDropdownManager.position(FormulaDropdownManager.anchor);
-      }
-      scheduleDependencyDraw();
-    });
-
-    // Global mouseup to catch drag ending outside container
-    document.addEventListener("mouseup", handleMouseUp);
-    document.addEventListener("keydown", handleZenModeShortcut);
-
-    // Format button event listeners
-    const boldBtn = document.getElementById("format-bold");
-    const italicBtn = document.getElementById("format-italic");
-    const underlineBtn = document.getElementById("format-underline");
-    const alignLeftBtn = document.getElementById("align-left");
-    const alignCenterBtn = document.getElementById("align-center");
-    const alignRightBtn = document.getElementById("align-right");
-    const cellBgPicker = document.getElementById("cell-bg-color");
-    const cellTextColorPicker = document.getElementById("cell-text-color");
-    const fontSizeList = document.getElementById("font-size-list");
-
-    if (boldBtn) {
-      boldBtn.addEventListener("mousedown", function (e) {
-        e.preventDefault(); // Prevent focus loss
-        CellFormattingManager.applyFormat("bold");
-      });
-    }
-    if (italicBtn) {
-      italicBtn.addEventListener("mousedown", function (e) {
-        e.preventDefault();
-        CellFormattingManager.applyFormat("italic");
-      });
-    }
-    if (underlineBtn) {
-      underlineBtn.addEventListener("mousedown", function (e) {
-        e.preventDefault();
-        CellFormattingManager.applyFormat("underline");
-      });
-    }
-    if (alignLeftBtn) {
-      alignLeftBtn.addEventListener("mousedown", function (e) {
-        e.preventDefault();
-        CellFormattingManager.applyAlignment("left");
-      });
-    }
-    if (alignCenterBtn) {
-      alignCenterBtn.addEventListener("mousedown", function (e) {
-        e.preventDefault();
-        CellFormattingManager.applyAlignment("center");
-      });
-    }
-    if (alignRightBtn) {
-      alignRightBtn.addEventListener("mousedown", function (e) {
-        e.preventDefault();
-        CellFormattingManager.applyAlignment("right");
-      });
-    }
-    if (cellBgPicker) {
-      cellBgPicker.addEventListener("input", function (e) {
-        CellFormattingManager.applyCellBackground(e.target.value);
-      });
-    }
-    if (cellTextColorPicker) {
-      cellTextColorPicker.addEventListener("input", function (e) {
-        CellFormattingManager.applyCellTextColor(e.target.value);
-      });
-    }
-    if (fontSizeList) {
-      fontSizeList.addEventListener("mousedown", function (e) {
-        if (e.target.closest("button")) {
-          e.preventDefault();
-        }
-      });
-      fontSizeList.addEventListener("click", function (e) {
-        const button = e.target.closest("button[data-size]");
-        if (!button) return;
-        CellFormattingManager.applyFontSize(button.dataset.size);
-      });
-    }
-
-    // Button event listeners
-    const addRowBtn = document.getElementById("add-row");
-    const addColBtn = document.getElementById("add-col");
-    const clearBtn = document.getElementById("clear-spreadsheet");
-    const themeToggleBtn = document.getElementById("theme-toggle");
-    const toggleZenBtn = document.getElementById("toggle-zen");
-    const zenFloatBtn = document.getElementById("zen-float-toggle");
-    const copyUrlBtn = document.getElementById("copy-url");
-    const importCsvBtn = document.getElementById("import-csv");
-    const importCsvInput = document.getElementById("import-csv-file");
-    const exportCsvBtn = document.getElementById("export-csv");
-    const presentBtn = document.getElementById("present-btn");
-    const qrBtn = document.getElementById("qr-btn");
-    const qrCloseBtn = document.getElementById("qr-close-btn");
-    const qrBackdrop = document.querySelector("#qr-modal .modal-backdrop");
-    const traceDepsBtn = document.getElementById("trace-deps-btn");
-
-    if (addRowBtn) {
-      addRowBtn.addEventListener("click", () => {
-        addRow();
-        scheduleFullSync();
-        refreshDependencyLayer();
-      });
-    }
-    if (addColBtn) {
-      addColBtn.addEventListener("click", () => {
-        addColumn();
-        scheduleFullSync();
-        refreshDependencyLayer();
-      });
-    }
-    if (clearBtn) {
-      clearBtn.addEventListener("click", () => {
-        clearSpreadsheet();
-        scheduleFullSync();
-        refreshDependencyLayer();
-      });
-    }
-    if (themeToggleBtn) {
-      themeToggleBtn.addEventListener("click", () => ThemeManager.toggleTheme());
-    }
-    if (toggleZenBtn) {
-      toggleZenBtn.addEventListener("click", () => toggleZenMode());
-    }
-    if (zenFloatBtn) {
-      zenFloatBtn.addEventListener("click", () => toggleZenMode());
-    }
-    if (copyUrlBtn) {
-      copyUrlBtn.addEventListener("click", () => QRCodeManager.copyURL());
-    }
-    if (importCsvBtn && importCsvInput) {
-      importCsvBtn.addEventListener("click", function () {
-        importCsvInput.click();
-      });
-    }
-    if (importCsvInput) {
-      importCsvInput.addEventListener("change", function (e) {
-        const file = e.target.files && e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function () {
-          CSVManager.importCSVText(String(reader.result || ""));
-        };
-        reader.onerror = function () {
-          alert("Failed to read the CSV file.");
-        };
-        reader.readAsText(file);
-        e.target.value = "";
-      });
-    }
-    if (exportCsvBtn) {
-      exportCsvBtn.addEventListener("click", () => CSVManager.downloadCSV());
-    }
-    const exportExcelBtn = document.getElementById("export-excel");
-    if (exportExcelBtn) {
-      exportExcelBtn.addEventListener("click", () => ExcelManager.downloadExcel());
-    }
-    if (presentBtn) {
-      presentBtn.addEventListener("click", () => {
-        recalculateFormulas();
-        const { rows, cols } = getState();
-        PresentationManager.start(data, formulas, {
-          getCellValue,
-          data,
-          rows,
-          cols,
-        });
-      });
-    }
-    if (qrBtn) {
-      qrBtn.addEventListener("click", () => QRCodeManager.showQRModal());
-    }
-    if (qrCloseBtn) {
-      qrCloseBtn.addEventListener("click", () => QRCodeManager.hideQRModal());
-    }
-    if (qrBackdrop) {
-      qrBackdrop.addEventListener("click", () => QRCodeManager.hideQRModal());
-    }
-    if (traceDepsBtn) {
-      traceDepsBtn.addEventListener("click", () => {
-        DependencyTracer.init();
-        const isActive = DependencyTracer.toggle();
-        traceDepsBtn.classList.toggle("active", isActive);
-        if (isActive) {
-          DependencyTracer.draw(getFormulasArray());
-          showToast("Visualizing formula dependencies", "info");
-        } else {
-          showToast("Logic visualization hidden", "info");
-        }
-      });
-    }
-
-    // Embed mode event listeners
-    const generateEmbedBtn = document.getElementById("generate-embed");
-    if (generateEmbedBtn) {
-      generateEmbedBtn.addEventListener("click", () => UIModeManager.showEmbedModal());
-    }
-
-    const embedCopyBtn = document.getElementById("embed-copy-btn");
-    if (embedCopyBtn) {
-      embedCopyBtn.addEventListener("click", async () => {
-        const textarea = document.getElementById("embed-code-textarea");
-        try {
-          await navigator.clipboard.writeText(textarea.value);
-          showToast("Embed code copied to clipboard!", "success");
-          embedCopyBtn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
-          setTimeout(() => {
-            embedCopyBtn.innerHTML = '<i class="fa-solid fa-copy"></i> Copy to Clipboard';
-          }, 2000);
-        } catch (err) {
-          textarea.select();
-          document.execCommand("copy");
-          showToast("Embed code copied!", "success");
-        }
-      });
-    }
-
-    const embedCloseBtn = document.getElementById("embed-close-btn");
-    if (embedCloseBtn) {
-      embedCloseBtn.addEventListener("click", () => UIModeManager.hideEmbedModal());
-    }
-
-    const embedBackdrop = document.querySelector("#embed-modal .modal-backdrop");
-    if (embedBackdrop) {
-      embedBackdrop.addEventListener("click", () => UIModeManager.hideEmbedModal());
-    }
-
-    // JSON editor modal event listeners
-    const openJSONBtn = document.getElementById("open-json-btn");
-    const jsonCloseBtn = document.getElementById("json-close-btn");
-    const jsonCopyBtn = document.getElementById("json-copy-btn");
-    const jsonBackdrop = document.querySelector("#json-modal .modal-backdrop");
-
-    if (openJSONBtn) {
-      openJSONBtn.addEventListener("click", () => JSONManager.openModal());
-    }
-    if (jsonCloseBtn) {
-      jsonCloseBtn.addEventListener("click", () => JSONManager.closeModal());
-    }
-    if (jsonBackdrop) {
-      jsonBackdrop.addEventListener("click", () => JSONManager.closeModal());
-    }
-    if (jsonCopyBtn) {
-      jsonCopyBtn.addEventListener("click", () => JSONManager.copyJSONToClipboard());
-    }
-
-    // JSON hash tool modal event listeners
-    const openHashToolBtn = document.getElementById("open-hash-tool-btn");
-    const hashToolCloseBtn = document.getElementById("hash-tool-close-btn");
-    const hashToolBackdrop = document.querySelector("#hash-tool-modal .modal-backdrop");
-
-    if (openHashToolBtn) {
-      openHashToolBtn.addEventListener("click", () => HashToolManager.openModal());
-    }
-    if (hashToolCloseBtn) {
-      hashToolCloseBtn.addEventListener("click", () => HashToolManager.closeModal());
-    }
-    if (hashToolBackdrop) {
-      hashToolBackdrop.addEventListener("click", () => HashToolManager.closeModal());
-    }
-
-    // P2P collaboration event listeners
-    const p2pBtn = document.getElementById("p2p-btn");
-    p2pUI.modal = document.getElementById("p2p-modal");
-    p2pUI.startHostBtn = document.getElementById("p2p-start-host");
-    p2pUI.joinBtn = document.getElementById("p2p-join-btn");
-    p2pUI.copyIdBtn = document.getElementById("p2p-copy-id");
-    p2pUI.idDisplay = document.getElementById("p2p-id-display");
-    p2pUI.statusEl = document.getElementById("p2p-status");
-    p2pUI.myIdInput = document.getElementById("p2p-my-id");
-    p2pUI.remoteIdInput = document.getElementById("p2p-remote-id");
-    presenceStackEl = document.getElementById("presence-stack");
-    const p2pCloseBtn = document.getElementById("p2p-close-btn");
-    const p2pBackdrop = document.querySelector("#p2p-modal .modal-backdrop");
-
-    if (p2pUI.startHostBtn) {
-      p2pUI.startHostLabel = p2pUI.startHostBtn.innerHTML;
-    }
-    if (p2pUI.joinBtn) {
-      p2pUI.joinLabel = p2pUI.joinBtn.innerHTML;
-    }
-
-    if (p2pBtn && p2pUI.modal) {
-      p2pBtn.addEventListener("click", () => p2pUI.modal.classList.remove("hidden"));
-    }
-    if (p2pCloseBtn && p2pUI.modal) {
-      p2pCloseBtn.addEventListener("click", () => p2pUI.modal.classList.add("hidden"));
-    }
-    if (p2pBackdrop && p2pUI.modal) {
-      p2pBackdrop.addEventListener("click", () => p2pUI.modal.classList.add("hidden"));
-    }
-
-    if (p2pUI.startHostBtn) {
-      p2pUI.startHostBtn.addEventListener("click", async () => {
-        p2pUI.startHostBtn.disabled = true;
-        p2pUI.startHostBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Connecting...';
-
-        const started = await P2PManager.startHosting();
-        if (!started) {
-          p2pUI.startHostBtn.disabled = false;
-          p2pUI.startHostBtn.innerHTML = p2pUI.startHostLabel;
-          return;
-        }
-        p2pUI.startHostBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Hosting...';
-      });
-    }
-
-    if (p2pUI.joinBtn) {
-      p2pUI.joinBtn.addEventListener("click", async () => {
-        const id = p2pUI.remoteIdInput ? p2pUI.remoteIdInput.value.trim() : "";
-        if (!id) {
-          showToast("Enter host ID to join", "warning");
-          return;
-        }
-
-        p2pUI.joinBtn.disabled = true;
-        p2pUI.joinBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Connecting...';
-
-        const started = await P2PManager.joinSession(id);
-        if (!started) {
-          p2pUI.joinBtn.disabled = false;
-          p2pUI.joinBtn.innerHTML = p2pUI.joinLabel;
-        }
-      });
-    }
-
-    if (p2pUI.copyIdBtn) {
-      p2pUI.copyIdBtn.addEventListener("click", async () => {
-        if (!p2pUI.myIdInput) return;
-        try {
-          await navigator.clipboard.writeText(p2pUI.myIdInput.value);
-          showToast("ID copied!", "success");
-        } catch (err) {
-          p2pUI.myIdInput.select();
-          document.execCommand("copy");
-          showToast("ID copied!", "success");
-        }
-      });
-    }
-
-    // Read-only mode event listeners
-    const toggleReadOnlyBtn = document.getElementById("toggle-readonly");
-    if (toggleReadOnlyBtn) {
-      toggleReadOnlyBtn.addEventListener("click", () => UIModeManager.toggleReadOnlyMode());
-    }
-
-    const enableEditingBtn = document.getElementById("enable-editing");
-    if (enableEditingBtn) {
-      enableEditingBtn.addEventListener("click", function () {
-        if (isReadOnly) {
-          UIModeManager.toggleReadOnlyMode();
-        }
-      });
-    }
-
-    CommandPaletteManager.init({
-      isDarkMode: () => ThemeManager.isDarkMode(),
-      toggleTheme: () => ThemeManager.toggleTheme(),
-      clearSpreadsheet: () => {
-        clearSpreadsheet();
-        scheduleFullSync();
-        refreshDependencyLayer();
-      },
-      recalculateFormulas,
-      updateURL,
-      showToast,
-      openCsvImport: () => {
-        if (importCsvInput) importCsvInput.click();
-      },
-      exportCSV: () => CSVManager.downloadCSV(),
-      exportExcel: () => ExcelManager.downloadExcel(),
-      openJSONModal: () => JSONManager.openModal(),
-      openHashTool: () => HashToolManager.openModal(),
-      copyLink: () => QRCodeManager.copyURL(),
-      showQRModal: () => QRCodeManager.showQRModal(),
-      showEmbedModal: () => UIModeManager.showEmbedModal(),
-      openTemplateGallery: () => TemplateManager.openGallery(),
-      startPresentation: () => {
-        if (presentBtn) presentBtn.click();
-      },
-      toggleReadOnly: () => UIModeManager.toggleReadOnlyMode(),
-      isReadOnly: () => isReadOnly,
-      toggleZen: () => toggleZenMode(),
-      isZen: () => isZenMode,
-      toggleDependencies: () => {
-        if (traceDepsBtn) traceDepsBtn.click();
-      },
-      openP2PModal: () => {
-        if (p2pUI.modal) p2pUI.modal.classList.remove("hidden");
-      },
-      startP2PHost: () => {
-        if (p2pUI.modal) p2pUI.modal.classList.remove("hidden");
-        if (p2pUI.startHostBtn) p2pUI.startHostBtn.click();
-      },
-      focusP2PJoin: () => {
-        if (p2pUI.modal) p2pUI.modal.classList.remove("hidden");
-        if (p2pUI.remoteIdInput) {
-          p2pUI.remoteIdInput.focus();
-          p2pUI.remoteIdInput.select();
-        }
-      },
-      copyP2PId: () => {
-        if (p2pUI.copyIdBtn) p2pUI.copyIdBtn.click();
-      },
-      getP2PId: () => (p2pUI.myIdInput ? p2pUI.myIdInput.value.trim() : ""),
-      openPasswordModal: () => PasswordManager.handleLockButtonClick(),
-      openGitHub: () => {
-        const githubLink = document.querySelector(".github-link");
-        if (githubLink) {
-          githubLink.click();
-          return;
-        }
-        window.open("https://github.com/supunlakmal/spreadsheet", "_blank", "noopener");
-      },
-      applyFormat: (format) => CellFormattingManager.applyFormat(format),
-    });
-
-    // Handle browser back/forward
-    window.addEventListener("hashchange", function () {
-      loadStateFromURL();
-      renderGrid();
-      DependencyTracer.init();
-      scheduleDependencyDraw();
-    });
-  }
-
-  // Start when DOM is ready
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+  return next;
+}
+
+function cacheElements() {
+  ui.titleInput = document.getElementById("calendar-title");
+  ui.prevMonth = document.getElementById("prev-month");
+  ui.nextMonth = document.getElementById("next-month");
+  ui.todayBtn = document.getElementById("today-btn");
+  ui.addEventBtn = document.getElementById("add-event");
+  ui.copyLinkBtn = document.getElementById("copy-link");
+  ui.lockBtn = document.getElementById("lock-btn");
+  ui.viewButtons = Array.from(document.querySelectorAll(".view-toggle button"));
+  ui.weekstartToggle = document.getElementById("weekstart-toggle");
+  ui.themeToggle = document.getElementById("theme-toggle");
+  ui.monthLabel = document.getElementById("month-label");
+  ui.weekdayRow = document.getElementById("weekday-row");
+  ui.calendarGrid = document.getElementById("calendar-grid");
+  ui.selectedDateLabel = document.getElementById("selected-date-label");
+  ui.eventList = document.getElementById("event-list");
+  ui.addEventInline = document.getElementById("add-event-inline");
+  ui.urlLength = document.getElementById("url-length");
+  ui.urlWarning = document.getElementById("url-warning");
+  ui.exportJson = document.getElementById("export-json");
+  ui.importIcs = document.getElementById("import-ics");
+  ui.icsInput = document.getElementById("ics-input");
+  ui.clearAll = document.getElementById("clear-all");
+  ui.lockedOverlay = document.getElementById("locked-overlay");
+  ui.unlockBtn = document.getElementById("unlock-btn");
+
+  ui.eventModal = document.getElementById("event-modal");
+  ui.eventForm = document.getElementById("event-form");
+  ui.eventModalTitle = document.getElementById("event-modal-title");
+  ui.eventClose = document.getElementById("event-close");
+  ui.eventCancel = document.getElementById("event-cancel");
+  ui.eventDelete = document.getElementById("event-delete");
+  ui.eventTitle = document.getElementById("event-title");
+  ui.eventDate = document.getElementById("event-date");
+  ui.eventTime = document.getElementById("event-time");
+  ui.eventDuration = document.getElementById("event-duration");
+  ui.eventAllDay = document.getElementById("event-all-day");
+  ui.eventRecurrence = document.getElementById("event-recurrence");
+  ui.eventColor = document.getElementById("event-color");
+  ui.colorPalette = document.getElementById("color-palette");
+
+  ui.passwordModal = document.getElementById("password-modal");
+  ui.passwordTitle = document.getElementById("password-title");
+  ui.passwordDesc = document.getElementById("password-desc");
+  ui.passwordInput = document.getElementById("password-input");
+  ui.passwordConfirmField = document.getElementById("password-confirm-field");
+  ui.passwordConfirm = document.getElementById("password-confirm");
+  ui.passwordError = document.getElementById("password-error");
+  ui.passwordClose = document.getElementById("password-close");
+  ui.passwordCancel = document.getElementById("password-cancel");
+  ui.passwordSubmit = document.getElementById("password-submit");
+
+  ui.toastContainer = document.getElementById("toast-container");
+}
+
+function showToast(message, type = "info") {
+  if (!ui.toastContainer) return;
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`.trim();
+  toast.textContent = message;
+  ui.toastContainer.appendChild(toast);
+  setTimeout(() => {
+    toast.remove();
+  }, 3200);
+}
+
+function scheduleSave() {
+  if (lockState.encrypted && !lockState.unlocked) return;
+  if (saveTimer) window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(async () => {
+    await writeStateToHash(state, password);
+    updateUrlLength();
+  }, DEBOUNCE_MS);
+}
+
+function updateUrlLength() {
+  const length = window.location.hash.length;
+  if (ui.urlLength) ui.urlLength.textContent = String(length);
+  if (!ui.urlWarning) return;
+  if (length > 2000) {
+    ui.urlWarning.textContent = "Warning: long URLs may get truncated when shared.";
   } else {
-    init();
+    ui.urlWarning.textContent = "";
   }
+}
 
-  // ========== Toolbar Scroll Logic ==========
-  function initToolbarScroll() {
-    const toolbar = document.querySelector(".toolbar");
-    const scrollLeftBtn = document.getElementById("scroll-left");
-    const scrollRightBtn = document.getElementById("scroll-right");
+function updateTheme() {
+  document.body.dataset.theme = state.s.d ? "dark" : "light";
+  if (ui.themeToggle) {
+    ui.themeToggle.textContent = `Theme: ${state.s.d ? "Dark" : "Light"}`;
+  }
+}
 
-    if (!toolbar || !scrollLeftBtn || !scrollRightBtn) return;
+function updateWeekStartLabel() {
+  if (!ui.weekstartToggle) return;
+  ui.weekstartToggle.textContent = state.s.m ? "Week starts Monday" : "Week starts Sunday";
+}
 
-    function updateScrollButtons() {
-      // Check if content overflows
-      const isOverflowing = toolbar.scrollWidth > toolbar.clientWidth;
-      const scrollLeft = toolbar.scrollLeft;
-      const maxScroll = toolbar.scrollWidth - toolbar.clientWidth;
+function updateViewButtons() {
+  if (!ui.viewButtons || !ui.viewButtons.length) return;
+  ui.viewButtons.forEach((button) => {
+    const isActive = button.dataset.view === currentView;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+}
 
-      // Tolerance (fixes weird browser sub-pixel issues)
-      const tolerance = 2;
+function setView(view) {
+  if (!view) return;
+  currentView = view;
+  updateViewButtons();
+  render();
+}
 
-      if (!isOverflowing) {
-        scrollLeftBtn.classList.add("hidden");
-        scrollRightBtn.classList.add("hidden");
-        return;
-      }
-
-      // Show/Hide Left Button
-      if (scrollLeft > tolerance) {
-        scrollLeftBtn.classList.remove("hidden");
-      } else {
-        scrollLeftBtn.classList.add("hidden");
-      }
-
-      // Show/Hide Right Button
-      if (scrollLeft < maxScroll - tolerance) {
-        scrollRightBtn.classList.remove("hidden");
-      } else {
-        scrollRightBtn.classList.add("hidden");
-      }
+function updateLockUI() {
+  const isLocked = lockState.encrypted && !lockState.unlocked;
+  if (ui.lockBtn) {
+    if (lockState.encrypted) {
+      ui.lockBtn.textContent = isLocked ? "Unlock" : "Remove lock";
+    } else {
+      ui.lockBtn.textContent = "Lock";
     }
+  }
+  if (ui.lockedOverlay) {
+    ui.lockedOverlay.classList.toggle("hidden", !isLocked);
+  }
+  const disabled = isLocked;
+  [ui.addEventBtn, ui.addEventInline, ui.copyLinkBtn].forEach((btn) => {
+    if (btn) btn.disabled = disabled;
+  });
+}
 
-    // Scroll amount for button clicks
-    const scrollAmount = 200;
+function groupOccurrences(occurrences) {
+  const map = new Map();
+  occurrences.forEach((occ) => {
+    const key = formatDateKey(new Date(occ.start));
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(occ);
+  });
 
-    scrollLeftBtn.addEventListener("click", () => {
-      toolbar.scrollBy({ left: -scrollAmount, behavior: "smooth" });
-    });
+  map.forEach((list) => {
+    list.sort((a, b) => a.start - b.start);
+  });
+  return map;
+}
 
-    scrollRightBtn.addEventListener("click", () => {
-      toolbar.scrollBy({ left: scrollAmount, behavior: "smooth" });
-    });
+function decorateOccurrences(occurrences) {
+  return occurrences.map((occ) => {
+    const color = state.c[occ.colorIndex] || DEFAULT_COLORS[0];
+    const timeLabel = occ.isAllDay ? "All day" : formatTime(new Date(occ.start));
+    return { ...occ, color, timeLabel };
+  });
+}
 
-    // Listen for scroll events
-    toolbar.addEventListener("scroll", () => {
-      // Debounce the UI update slightly for performance
-      requestAnimationFrame(updateScrollButtons);
-    });
-
-    // Update on resize
-    window.addEventListener("resize", updateScrollButtons);
-
-    // Initial check
-    updateScrollButtons();
+function render() {
+  updateTheme();
+  updateWeekStartLabel();
+  if (ui.titleInput && document.activeElement !== ui.titleInput) {
+    ui.titleInput.value = state.t;
   }
 
-  // Tools Modal Logic
-  const toolsMenuBtn = document.getElementById("tools-menu-btn");
-  const toolsModal = document.getElementById("tools-modal");
-  const toolsCloseBtn = document.getElementById("tools-close-btn");
+  const weekStartsOnMonday = state.s.m === 1;
+  if (ui.calendarGrid) {
+    ui.calendarGrid.className = `calendar-grid ${currentView}-view`;
+    ui.calendarGrid.style.gridTemplateColumns = "";
+    ui.calendarGrid.style.gridTemplateRows = "";
+  }
+  if (ui.weekdayRow) {
+    ui.weekdayRow.classList.toggle("hidden", currentView === "year");
+  }
 
-  if (toolsMenuBtn && toolsModal && toolsCloseBtn) {
-    toolsMenuBtn.addEventListener("click", () => {
-      toolsModal.classList.remove("hidden");
-    });
+  if (currentView === "month") {
+    const range = getMonthGridRange(viewDate, weekStartsOnMonday);
+    const expanded = expandEvents(state.e, range.start, range.end);
+    const decorated = decorateOccurrences(expanded);
+    occurrencesByDay = groupOccurrences(decorated);
 
-    toolsCloseBtn.addEventListener("click", () => {
-      toolsModal.classList.add("hidden");
-    });
+    if (ui.monthLabel) ui.monthLabel.textContent = formatMonthLabel(viewDate);
+    if (ui.weekdayRow) renderWeekdayHeaders(ui.weekdayRow, weekStartsOnMonday, "month");
 
-    toolsModal.addEventListener("click", (e) => {
-      if (e.target === toolsModal || e.target.classList.contains("modal-backdrop")) {
-        toolsModal.classList.add("hidden");
-      }
-    });
-
-    // Close modal when a tool button is clicked (improved UX)
-    toolsModal.querySelectorAll(".tool-item").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        // Optional: Don't close for toggles if we want to toggle multiple times
-        // But for now, let's close it to emulate a menu
-        // Exception: maybe theme toggle?
-        if (!btn.id.includes("toggle")) {
-          toolsModal.classList.add("hidden");
-        }
+    if (ui.calendarGrid) {
+      renderCalendar({
+        container: ui.calendarGrid,
+        dates: range.dates,
+        currentMonth: viewDate.getMonth(),
+        selectedDate,
+        eventsByDay: occurrencesByDay,
+        onSelectDay: handleSelectDay,
+        onEventClick: (event) => openEventModal({ index: event.sourceIndex }),
       });
-    });
+    }
+  } else if (currentView === "week") {
+    const range = getWeekRange(selectedDate, weekStartsOnMonday);
+    const expanded = expandEvents(state.e, range.start, range.end);
+    const decorated = decorateOccurrences(expanded);
+    occurrencesByDay = groupOccurrences(decorated);
+
+    if (ui.monthLabel) ui.monthLabel.textContent = formatRangeLabel(range.start, range.end);
+    if (ui.weekdayRow) renderWeekdayHeaders(ui.weekdayRow, weekStartsOnMonday, "week", range.dates);
+    if (ui.calendarGrid) {
+      renderTimeGrid({
+        container: ui.calendarGrid,
+        dates: range.dates,
+        occurrences: decorated,
+        onSelectDay: handleSelectDay,
+        onEventClick: (event) => openEventModal({ index: event.sourceIndex }),
+      });
+    }
+  } else if (currentView === "day") {
+    const start = startOfDay(selectedDate);
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 23, 59, 59);
+    const expanded = expandEvents(state.e, start, end);
+    const decorated = decorateOccurrences(expanded);
+    occurrencesByDay = groupOccurrences(decorated);
+
+    if (ui.monthLabel) ui.monthLabel.textContent = formatDateLabel(selectedDate);
+    if (ui.weekdayRow) renderWeekdayHeaders(ui.weekdayRow, weekStartsOnMonday, "day", [start]);
+    if (ui.calendarGrid) {
+      renderTimeGrid({
+        container: ui.calendarGrid,
+        dates: [start],
+        occurrences: decorated,
+        onSelectDay: handleSelectDay,
+        onEventClick: (event) => openEventModal({ index: event.sourceIndex }),
+      });
+    }
+  } else if (currentView === "year") {
+    const year = viewDate.getFullYear();
+    const start = new Date(year, 0, 1);
+    const end = new Date(year, 11, 31, 23, 59, 59);
+    const expanded = expandEvents(state.e, start, end);
+    const decorated = decorateOccurrences(expanded);
+    occurrencesByDay = groupOccurrences(decorated);
+
+    if (ui.monthLabel) ui.monthLabel.textContent = String(year);
+    if (ui.calendarGrid) {
+      renderYearView({
+        container: ui.calendarGrid,
+        year,
+        eventsByDay: occurrencesByDay,
+        selectedDate,
+        weekStartsOnMonday,
+        onSelectDay: handleSelectDay,
+      });
+    }
   }
 
-  // Initialize all modules
-  initToolbarScroll();
-  TemplateManager.init();
-})();
+  renderEventList();
+  updateUrlLength();
+  updateLockUI();
+}
+
+function renderEventList() {
+  if (!ui.eventList || !ui.selectedDateLabel) return;
+  ui.selectedDateLabel.textContent = formatDateLabel(selectedDate);
+  const key = formatDateKey(selectedDate);
+  const list = occurrencesByDay.get(key) || [];
+
+  ui.eventList.innerHTML = "";
+  if (!list.length) {
+    const empty = document.createElement("div");
+    empty.className = "event-item";
+    empty.textContent = "No events yet.";
+    ui.eventList.appendChild(empty);
+    return;
+  }
+
+  list.forEach((event) => {
+    const item = document.createElement("div");
+    item.className = "event-item";
+    item.dataset.index = String(event.sourceIndex);
+
+    const left = document.createElement("div");
+    left.className = "event-info";
+    const title = document.createElement("div");
+    title.className = "event-title";
+    title.textContent = event.title;
+    const time = document.createElement("div");
+    time.className = "event-time";
+    time.textContent = event.isAllDay ? "All day" : `${event.timeLabel}`;
+    left.appendChild(title);
+    left.appendChild(time);
+
+    const dot = document.createElement("div");
+    dot.className = "event-dot";
+    dot.style.background = event.color;
+
+    item.appendChild(left);
+    item.appendChild(dot);
+    item.addEventListener("click", () => openEventModal({ index: event.sourceIndex }));
+    ui.eventList.appendChild(item);
+  });
+}
+
+function handleSelectDay(date) {
+  selectedDate = startOfDay(date);
+  if (currentView === "month") {
+    if (date.getMonth() !== viewDate.getMonth() || date.getFullYear() !== viewDate.getFullYear()) {
+      viewDate = new Date(date.getFullYear(), date.getMonth(), 1);
+    }
+  } else {
+    viewDate = startOfDay(date);
+  }
+  render();
+}
+
+function openEventModal({ index = null, date = null } = {}) {
+  if (!ui.eventModal) return;
+  editingIndex = index;
+  const isEditing = typeof index === "number";
+  ui.eventModalTitle.textContent = isEditing ? "Edit event" : "Add event";
+  ui.eventDelete.classList.toggle("hidden", !isEditing);
+
+  const baseDate = date || selectedDate;
+  let startDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 9, 0);
+  let duration = 60;
+  let title = "";
+  let color = state.c[0] || DEFAULT_COLORS[0];
+  let rule = "";
+  let isAllDay = false;
+
+  if (isEditing) {
+    const entry = state.e[index];
+    if (entry) {
+      const [startMin, storedDuration, storedTitle, colorIndex, storedRule] = entry;
+      startDate = new Date(startMin * 60000);
+      duration = storedDuration || 0;
+      title = storedTitle || "";
+      color = state.c[colorIndex] || color;
+      rule = storedRule || "";
+      isAllDay = duration === 0;
+    }
+  }
+
+  ui.eventTitle.value = title;
+  ui.eventDate.value = formatDateKey(startDate);
+  ui.eventTime.value = startDate.toTimeString().slice(0, 5);
+  ui.eventDuration.value = String(isAllDay ? 0 : duration || 60);
+  ui.eventRecurrence.value = rule;
+  ui.eventColor.value = color;
+  ui.eventAllDay.checked = isAllDay;
+  toggleAllDay(isAllDay);
+  renderColorPalette(color);
+
+  ui.eventModal.classList.remove("hidden");
+}
+
+function closeEventModal() {
+  if (ui.eventModal) ui.eventModal.classList.add("hidden");
+}
+
+function toggleAllDay(allDay) {
+  if (!ui.eventTime || !ui.eventDuration) return;
+  ui.eventTime.disabled = allDay;
+  ui.eventDuration.disabled = allDay;
+  if (allDay) {
+    ui.eventDuration.value = "0";
+  } else if (Number(ui.eventDuration.value) === 0) {
+    ui.eventDuration.value = "60";
+  }
+}
+
+function renderColorPalette(activeColor) {
+  if (!ui.colorPalette) return;
+  ui.colorPalette.innerHTML = "";
+  state.c.forEach((color) => {
+    const swatch = document.createElement("button");
+    swatch.type = "button";
+    swatch.className = "color-swatch";
+    if (color.toLowerCase() === activeColor.toLowerCase()) {
+      swatch.classList.add("active");
+    }
+    swatch.style.background = color;
+    swatch.addEventListener("click", () => {
+      ui.eventColor.value = color;
+      renderColorPalette(color);
+    });
+    ui.colorPalette.appendChild(swatch);
+  });
+}
+
+function saveEvent(event) {
+  event.preventDefault();
+  if (!ui.eventTitle || !ui.eventDate) return;
+  const title = ui.eventTitle.value.trim() || "Untitled";
+  const dateValue = ui.eventDate.value;
+  if (!dateValue) return;
+
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const allDay = ui.eventAllDay.checked;
+
+  let startDate;
+  if (allDay) {
+    startDate = new Date(year, month - 1, day);
+  } else {
+    const [rawHours, rawMinutes] = ui.eventTime.value.split(":").map(Number);
+    const hours = Number.isFinite(rawHours) ? rawHours : 9;
+    const minutes = Number.isFinite(rawMinutes) ? rawMinutes : 0;
+    startDate = new Date(year, month - 1, day, hours, minutes);
+  }
+
+  const startMin = Math.floor(startDate.getTime() / 60000);
+  const duration = allDay ? 0 : Math.max(0, Number(ui.eventDuration.value) || 60);
+  const colorValue = ui.eventColor.value.toLowerCase();
+  let colorIndex = state.c.findIndex((color) => color.toLowerCase() === colorValue);
+  if (colorIndex === -1) {
+    state.c.push(colorValue);
+    colorIndex = state.c.length - 1;
+  }
+  const rule = ui.eventRecurrence.value;
+  const entry = [startMin, duration, title, colorIndex];
+  if (rule) entry.push(rule);
+
+  if (typeof editingIndex === "number") {
+    state.e[editingIndex] = entry;
+  } else {
+    state.e.push(entry);
+  }
+
+  selectedDate = startOfDay(startDate);
+  closeEventModal();
+  scheduleSave();
+  render();
+}
+
+function deleteEvent() {
+  if (typeof editingIndex !== "number") return;
+  const confirmed = window.confirm("Delete this event?");
+  if (!confirmed) return;
+  state.e.splice(editingIndex, 1);
+  editingIndex = null;
+  closeEventModal();
+  scheduleSave();
+  render();
+}
+
+function openPasswordModal({ mode, title, description, submitLabel }) {
+  if (!ui.passwordModal) return Promise.resolve(null);
+  passwordMode = mode;
+  ui.passwordTitle.textContent = title;
+  ui.passwordDesc.textContent = description;
+  ui.passwordInput.value = "";
+  ui.passwordConfirm.value = "";
+  ui.passwordError.classList.add("hidden");
+
+  if (mode === "set") {
+    ui.passwordConfirmField.classList.remove("hidden");
+  } else {
+    ui.passwordConfirmField.classList.add("hidden");
+  }
+
+  ui.passwordSubmit.textContent = submitLabel;
+  ui.passwordModal.classList.remove("hidden");
+
+  return new Promise((resolve) => {
+    passwordResolver = resolve;
+  });
+}
+
+function closePasswordModal() {
+  if (ui.passwordModal) ui.passwordModal.classList.add("hidden");
+  if (passwordResolver) {
+    passwordResolver(null);
+    passwordResolver = null;
+  }
+}
+
+function submitPassword() {
+  if (!passwordResolver) return;
+  const value = ui.passwordInput.value.trim();
+  if (!value) {
+    ui.passwordError.textContent = "Password is required.";
+    ui.passwordError.classList.remove("hidden");
+    return;
+  }
+
+  if (passwordMode === "set") {
+    if (value !== ui.passwordConfirm.value.trim()) {
+      ui.passwordError.textContent = "Passwords do not match.";
+      ui.passwordError.classList.remove("hidden");
+      return;
+    }
+  }
+
+  ui.passwordModal.classList.add("hidden");
+  passwordResolver(value);
+  passwordResolver = null;
+}
+
+async function handleLockAction() {
+  if (lockState.encrypted && !lockState.unlocked) {
+    await attemptUnlock();
+    return;
+  }
+
+  if (lockState.encrypted && lockState.unlocked) {
+    const confirmed = window.confirm("Remove password protection? This will store data unencrypted in the URL.");
+    if (!confirmed) return;
+    password = null;
+    lockState = { encrypted: false, unlocked: true };
+    await writeStateToHash(state, null);
+    updateLockUI();
+    showToast("Lock removed", "success");
+    return;
+  }
+
+  const value = await openPasswordModal({
+    mode: "set",
+    title: "Set password",
+    description: "Add a password so only people with the link and password can read this calendar.",
+    submitLabel: "Set password",
+  });
+  if (!value) return;
+  password = value;
+  lockState = { encrypted: true, unlocked: true };
+  await writeStateToHash(state, password);
+  updateLockUI();
+  showToast("Calendar locked", "success");
+}
+
+async function attemptUnlock() {
+  const value = await openPasswordModal({
+    mode: "unlock",
+    title: "Unlock calendar",
+    description: "Enter the password to decrypt this calendar.",
+    submitLabel: "Unlock",
+  });
+  if (!value) return;
+  try {
+    const loaded = await readStateFromHash(value);
+    password = value;
+    lockState = { encrypted: true, unlocked: true };
+    state = normalizeState(loaded);
+    render();
+    showToast("Calendar unlocked", "success");
+  } catch (error) {
+    showToast("Incorrect password", "error");
+    lockState = { encrypted: true, unlocked: false };
+    updateLockUI();
+  }
+}
+
+async function loadStateFromHash() {
+  if (!window.location.hash) {
+    state = cloneState(DEFAULT_STATE);
+    return;
+  }
+
+  if (isEncryptedHash()) {
+    lockState = { encrypted: true, unlocked: false };
+    state = cloneState(DEFAULT_STATE);
+    updateLockUI();
+    return;
+  }
+
+  try {
+    const loaded = await readStateFromHash();
+    state = normalizeState(loaded);
+  } catch (error) {
+    state = cloneState(DEFAULT_STATE);
+  }
+}
+
+function handleHashChange() {
+  loadStateFromHash().then(render);
+}
+
+function handleTitleInput() {
+  if (!ui.titleInput) return;
+  state.t = ui.titleInput.value.slice(0, MAX_TITLE_LENGTH);
+  scheduleSave();
+}
+
+function handleThemeToggle() {
+  state.s.d = state.s.d ? 0 : 1;
+  updateTheme();
+  scheduleSave();
+}
+
+function handleWeekStartToggle() {
+  state.s.m = state.s.m ? 0 : 1;
+  render();
+  scheduleSave();
+}
+
+function shiftView(direction) {
+  if (currentView === "month") {
+    viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + direction, 1);
+  } else if (currentView === "year") {
+    viewDate = new Date(viewDate.getFullYear() + direction, 0, 1);
+  } else if (currentView === "week") {
+    selectedDate = addDays(selectedDate, direction * 7);
+    viewDate = startOfDay(selectedDate);
+  } else if (currentView === "day") {
+    selectedDate = addDays(selectedDate, direction);
+    viewDate = startOfDay(selectedDate);
+  }
+  render();
+}
+
+function handlePrevMonth() {
+  shiftView(-1);
+}
+
+function handleNextMonth() {
+  shiftView(1);
+}
+
+function handleToday() {
+  const today = startOfDay(new Date());
+  viewDate = today;
+  selectedDate = today;
+  render();
+}
+
+async function handleCopyLink() {
+  try {
+    await navigator.clipboard.writeText(window.location.href);
+    showToast("Link copied", "success");
+  } catch (error) {
+    showToast("Unable to copy link", "error");
+  }
+}
+
+function handleExportJson() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "hashcal.json";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function handleImportIcsClick() {
+  if (ui.icsInput) ui.icsInput.click();
+}
+
+function handleIcsFile(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const text = String(reader.result || "");
+    const imported = parseIcs(text);
+    if (!imported.length) {
+      showToast("No events found", "error");
+      return;
+    }
+    const colorCount = state.c.length || 1;
+    imported.forEach((entry, idx) => {
+      const start = entry.start;
+      if (!start) return;
+      const startMin = Math.floor(start.getTime() / 60000);
+      let duration = 0;
+      if (entry.end) {
+        duration = Math.max(0, Math.round((entry.end.getTime() - start.getTime()) / 60000));
+      }
+      if (entry.isAllDay) duration = 0;
+      const colorIndex = idx % colorCount;
+      const event = [startMin, duration, entry.title || "Imported", colorIndex];
+      if (entry.rule) event.push(entry.rule);
+      state.e.push(event);
+    });
+    scheduleSave();
+    render();
+    showToast("Events imported", "success");
+  };
+  reader.readAsText(file);
+  event.target.value = "";
+}
+
+function handleClearAll() {
+  const confirmed = window.confirm("Clear all events? This cannot be undone.");
+  if (!confirmed) return;
+  state.e = [];
+  scheduleSave();
+  render();
+}
+
+function bindEvents() {
+  if (ui.titleInput) ui.titleInput.addEventListener("input", handleTitleInput);
+  if (ui.prevMonth) ui.prevMonth.addEventListener("click", handlePrevMonth);
+  if (ui.nextMonth) ui.nextMonth.addEventListener("click", handleNextMonth);
+  if (ui.todayBtn) ui.todayBtn.addEventListener("click", handleToday);
+  if (ui.viewButtons && ui.viewButtons.length) {
+    ui.viewButtons.forEach((button) => {
+      button.addEventListener("click", () => setView(button.dataset.view));
+    });
+  }
+  if (ui.addEventBtn) ui.addEventBtn.addEventListener("click", () => openEventModal({ date: selectedDate }));
+  if (ui.addEventInline) ui.addEventInline.addEventListener("click", () => openEventModal({ date: selectedDate }));
+  if (ui.copyLinkBtn) ui.copyLinkBtn.addEventListener("click", handleCopyLink);
+  if (ui.lockBtn) ui.lockBtn.addEventListener("click", handleLockAction);
+  if (ui.weekstartToggle) ui.weekstartToggle.addEventListener("click", handleWeekStartToggle);
+  if (ui.themeToggle) ui.themeToggle.addEventListener("click", handleThemeToggle);
+  if (ui.unlockBtn) ui.unlockBtn.addEventListener("click", attemptUnlock);
+  if (ui.exportJson) ui.exportJson.addEventListener("click", handleExportJson);
+  if (ui.importIcs) ui.importIcs.addEventListener("click", handleImportIcsClick);
+  if (ui.icsInput) ui.icsInput.addEventListener("change", handleIcsFile);
+  if (ui.clearAll) ui.clearAll.addEventListener("click", handleClearAll);
+
+  if (ui.eventClose) ui.eventClose.addEventListener("click", closeEventModal);
+  if (ui.eventCancel) ui.eventCancel.addEventListener("click", closeEventModal);
+  if (ui.eventDelete) ui.eventDelete.addEventListener("click", deleteEvent);
+  if (ui.eventForm) ui.eventForm.addEventListener("submit", saveEvent);
+  if (ui.eventAllDay) ui.eventAllDay.addEventListener("change", (e) => toggleAllDay(e.target.checked));
+
+  if (ui.passwordClose) ui.passwordClose.addEventListener("click", closePasswordModal);
+  if (ui.passwordCancel) ui.passwordCancel.addEventListener("click", closePasswordModal);
+  if (ui.passwordSubmit) ui.passwordSubmit.addEventListener("click", submitPassword);
+
+  window.addEventListener("hashchange", handleHashChange);
+}
+
+async function init() {
+  cacheElements();
+  bindEvents();
+  await loadStateFromHash();
+
+  if (!window.location.hash) {
+    await writeStateToHash(state, null);
+  }
+
+  updateViewButtons();
+  render();
+
+  if (isEncryptedHash() && !lockState.unlocked) {
+    attemptUnlock();
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}

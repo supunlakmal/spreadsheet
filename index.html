@@ -1,439 +1,183 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head><!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-77V3TP2B5T"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag() { dataLayer.push(arguments); }
-        gtag('js', new Date());
-
-        // Security: Exclude URL hash from analytics to prevent leaking spreadsheet data
-        gtag('config', 'G-77V3TP2B5T', {
-            'page_location': window.location.origin + window.location.pathname,
-            'page_path': window.location.pathname
-        });
-    </script>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!--
-        Security Note: Content Security Policy
-        - 'unsafe-inline' in style-src is required for user-controlled dynamic cell styling (colors, alignment, font-size).
-        - Removing 'unsafe-inline' would require refactoring all style.setProperty() and inline style assignments.
-        - XSS mitigations in script.js:
-          1. sanitizeHTML() uses DOMParser-based whitelist filtering (ALLOWED_TAGS, ALLOWED_SPAN_STYLES)
-          2. isContentSafe() provides defense-in-depth pattern detection for dangerous content
-          3. isValidCSSColor() validates color inputs to prevent CSS injection
-          4. safeJSONParse() prevents prototype pollution from URL state
-        - Note: script-src does NOT include 'unsafe-inline' or 'unsafe-eval', blocking inline script injection
-    -->
-    <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://www.googletagmanager.com https://unpkg.com 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com https://unpkg.com https://*.peerjs.com wss://*.peerjs.com https://*.metered.live;">
-    <title>Spreadsheet</title>
-    <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="icon" href="favicon.png" type="image/png" sizes="32x32">
-    <link rel="apple-touch-icon" href="apple-touch-icon.png" sizes="180x180">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-        integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA=="
-        crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="stylesheet" href="styles.css">
-
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HashCal</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <link rel="icon" href="favicon.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" sizes="180x180">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
-    <div class="container">
-        <div class="header">
-            <h1><i class="fa-solid fa-table-cells"></i> Spreadsheet</h1>
-            <button id="scroll-left" class="scroll-btn left hidden" aria-label="Scroll left"><i
-                    class="fa-solid fa-chevron-left"></i></button>
-            <div class="toolbar">
-                <div class="format-buttons">
-                    <button id="format-bold" type="button" class="format-btn" title="Bold (Ctrl+B)"><i
-                            class="fa-solid fa-bold"></i></button>
-                    <button id="format-italic" type="button" class="format-btn" title="Italic (Ctrl+I)"><i
-                            class="fa-solid fa-italic"></i></button>
-                    <button id="format-underline" type="button" class="format-btn" title="Underline (Ctrl+U)"><i
-                            class="fa-solid fa-underline"></i></button>
-                </div>
-                <!-- Toolbar content continues... -->
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">#</div>
+        <div class="brand-text">
+          <input id="calendar-title" class="title-input" type="text" maxlength="60" value="HashCal" aria-label="Calendar title">
+          <span class="brand-subtitle">Serverless privacy calendar. Your URL is the save file.</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div class="nav-group">
+          <button id="prev-month" type="button" aria-label="Previous month">Prev</button>
+          <button id="today-btn" type="button">Today</button>
+          <button id="next-month" type="button" aria-label="Next month">Next</button>
+        </div>
+        <div class="view-toggle" role="tablist" aria-label="Calendar view">
+          <button type="button" data-view="day" role="tab" aria-selected="false">Day</button>
+          <button type="button" data-view="week" role="tab" aria-selected="false">Week</button>
+          <button type="button" data-view="month" role="tab" aria-selected="true">Month</button>
+          <button type="button" data-view="year" role="tab" aria-selected="false">Year</button>
+        </div>
+        <button id="add-event" type="button" class="primary">Add event</button>
+        <button id="copy-link" type="button">Copy link</button>
+        <button id="lock-btn" type="button">Lock</button>
+      </div>
+    </header>
 
-                <div class="toolbar-divider"></div>
-                <div class="format-buttons">
-                    <button id="align-left" type="button" class="format-btn" title="Align left"><i
-                            class="fa-solid fa-align-left"></i></button>
-                    <button id="align-center" type="button" class="format-btn" title="Align center"><i
-                            class="fa-solid fa-align-center"></i></button>
-                    <button id="align-right" type="button" class="format-btn" title="Align right"><i
-                            class="fa-solid fa-align-right"></i></button>
-                </div>
-                <div class="toolbar-divider"></div>
-                <div class="size-control" id="font-size-list" title="Font size" role="group" aria-label="Font size">
-                    <span class="size-control-label" aria-hidden="true"><i class="fa-solid fa-text-height"></i></span>
-                    <button type="button" class="size-option" data-size="" aria-label="Font size auto">Auto</button>
-                    <button type="button" class="size-option" data-size="10" aria-label="Font size 10">10</button>
-                    <button type="button" class="size-option" data-size="12" aria-label="Font size 12">12</button>
-                    <button type="button" class="size-option" data-size="14" aria-label="Font size 14">14</button>
-                    <button type="button" class="size-option" data-size="16" aria-label="Font size 16">16</button>
-                    <button type="button" class="size-option" data-size="18" aria-label="Font size 18">18</button>
-                    <button type="button" class="size-option" data-size="24" aria-label="Font size 24">24</button>
-                </div>
-                <div class="toolbar-divider"></div>
-                <div class="color-control" title="Cell background color">
-                    <i class="fa-solid fa-fill-drip"></i>
-                    <input id="cell-bg-color" type="color" value="#ffffff" aria-label="Cell background color">
-                </div>
-                <div class="color-control" title="Text color">
-                    <i class="fa-solid fa-font"></i>
-                    <input id="cell-text-color" type="color" value="#000000" aria-label="Cell text color">
-                </div>
-                <div class="toolbar-divider"></div>
-                <button id="add-row" type="button"><i class="fa-solid fa-plus"></i> Row</button>
-                <button id="add-col" type="button"><i class="fa-solid fa-plus"></i> Column</button>
-                <button id="clear-spreadsheet" type="button" title="Clear all data and reset spreadsheet">
-                    <i class="fa-solid fa-eraser"></i> Clear
-                </button>
-                <button id="theme-toggle" type="button" class="theme-toggle" title="Toggle dark/light mode">
-                    <i class="fa-solid fa-sun icon-light"></i>
-                    <i class="fa-solid fa-moon icon-dark"></i>
-                </button>
-                <button id="toggle-zen" type="button" class="zen-toggle" title="Zen mode (Alt+Z)"
-                    aria-label="Toggle Zen mode" aria-pressed="false">
-                    <i class="fa-solid fa-eye"></i>
-                </button>
-                <div class="toolbar-divider"></div>
+    <main class="layout">
+      <section class="calendar-panel">
+        <div class="panel-header">
+          <div>
+            <h2 id="month-label" class="month-label">Month 2026</h2>
+            <div class="panel-actions">
+              <button id="weekstart-toggle" type="button" class="ghost">Week starts Sunday</button>
+              <button id="theme-toggle" type="button" class="ghost">Theme: Light</button>
+            </div>
+          </div>
+        </div>
+        <div id="weekday-row" class="weekday-row"></div>
+        <div id="calendar-grid" class="calendar-grid" role="grid" aria-label="Calendar"></div>
+        <div id="locked-overlay" class="locked-overlay hidden">
+          <div class="locked-card">
+            <h3>Encrypted calendar</h3>
+            <p>Enter the password to unlock and edit this calendar.</p>
+            <button id="unlock-btn" type="button" class="primary">Unlock</button>
+          </div>
+        </div>
+      </section>
 
-                <!-- Main Tools Button -->
-                <button id="tools-menu-btn" type="button" class="primary-action tools-btn">
-                    <i class="fa-solid fa-layer-group"></i> Tools
-                </button>
+      <aside class="side-panel">
+        <div class="side-card">
+          <h3 id="selected-date-label" class="side-title">Selected day</h3>
+          <div id="event-list" class="event-list"></div>
+          <button id="add-event-inline" type="button" class="ghost">Add event for this day</button>
+        </div>
 
-                <span id="grid-size" class="grid-size"><i class="fa-solid fa-grip"></i> 10 × 10</span>
-                <a href="https://github.com/supunlakmal/spreadsheet" target="_blank" rel="noopener noreferrer"
-                    class="github-link" title="View on GitHub">
-                    <i class="fa-brands fa-github"></i>
-                </a>
-            </div>
-            <button id="scroll-right" class="scroll-btn right hidden" aria-label="Scroll right"><i
-                    class="fa-solid fa-chevron-right"></i></button>
-            <div id="presence-stack" class="presence-stack" role="list" aria-label="Active collaborators"></div>
+        <div class="side-card">
+          <h4 class="side-title">Share and export</h4>
+          <div class="status-row">
+            <span>URL length</span>
+            <strong id="url-length">0</strong>
+          </div>
+          <p id="url-warning" class="url-warning"></p>
+          <div class="stacked-actions">
+            <button id="export-json" type="button" class="ghost">Export JSON</button>
+            <button id="import-ics" type="button" class="ghost">Import .ics</button>
+            <input id="ics-input" type="file" accept=".ics,text/calendar" hidden>
+          </div>
         </div>
-        <div id="readonly-banner" class="readonly-banner hidden">
-            <div class="readonly-banner-content">
-                <i class="fa-solid fa-eye"></i>
-                <span>Read-only mode - You can view and export, but not edit</span>
-                <button id="enable-editing" type="button" class="readonly-enable-btn">
-                    Enable Editing
-                </button>
-            </div>
+
+        <div class="side-card danger">
+          <h4 class="side-title">Danger zone</h4>
+          <button id="clear-all" type="button" class="danger-btn">Clear calendar</button>
         </div>
-        <div class="grid-wrapper">
-            <div id="spreadsheet" class="spreadsheet"></div>
+      </aside>
+    </main>
+  </div>
+
+  <div id="event-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="event-modal-title">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <header class="modal-header">
+        <h3 id="event-modal-title">Add event</h3>
+        <button id="event-close" type="button" class="icon-btn" aria-label="Close">x</button>
+      </header>
+      <form id="event-form" class="modal-form">
+        <label class="field">
+          <span>Title</span>
+          <input id="event-title" type="text" maxlength="80" required>
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>Date</span>
+            <input id="event-date" type="date" required>
+          </label>
+          <label class="field">
+            <span>Start</span>
+            <input id="event-time" type="time">
+          </label>
         </div>
-        <div class="status-bar">
-            <div class="status-hint">
-                <i class="fa-solid fa-link"></i> Data is saved in the URL - share the link to share your spreadsheet
-            </div>
-            <div class="status-bar-right">
-                <div id="selection-status" class="selection-stats" aria-live="polite">
-                    <span class="stat-item">Count: <b id="stat-count">0</b></span>
-                    <span class="stat-item stat-sum">Sum: <b id="stat-sum">0</b></span>
-                    <span class="stat-item stat-avg">Avg: <b id="stat-avg">0</b></span>
-                </div>
-                <div class="url-length-indicator">
-                    <span class="url-length-label">URL: <span id="url-length-value">0</span> chars</span>
-                    <div class="url-progress-container" title="URL length indicator">
-                        <div id="url-progress-bar" class="url-progress-bar"></div>
-                    </div>
-                    <span id="url-length-message" class="url-length-message"></span>
-                </div>
-            </div>
+        <div class="field-row">
+          <label class="field">
+            <span>Duration (mins)</span>
+            <input id="event-duration" type="number" min="0" step="5" value="60">
+          </label>
+          <label class="field checkbox-field">
+            <input id="event-all-day" type="checkbox">
+            <span>All day</span>
+          </label>
         </div>
+        <label class="field">
+          <span>Recurrence</span>
+          <select id="event-recurrence">
+            <option value="">None</option>
+            <option value="d">Daily</option>
+            <option value="w">Weekly</option>
+            <option value="m">Monthly</option>
+            <option value="y">Yearly</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Color</span>
+          <input id="event-color" type="color" value="#ff6b6b">
+        </label>
+        <div id="color-palette" class="color-palette"></div>
+        <div class="modal-actions">
+          <button id="event-delete" type="button" class="ghost danger hidden">Delete</button>
+          <div class="modal-actions-right">
+            <button id="event-cancel" type="button" class="ghost">Cancel</button>
+            <button id="event-save" type="submit" class="primary">Save</button>
+          </div>
+        </div>
+      </form>
     </div>
-    <button id="zen-float-toggle" type="button" class="zen-float-toggle" title="Exit Zen mode (Alt+Z)"
-        aria-label="Exit Zen mode">
-        <i class="fa-solid fa-eye-slash"></i>
-    </button>
+  </div>
 
-    <!-- Password Modal -->
-    <div id="password-modal" class="modal hidden">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content">
-            <h3 id="modal-title">Set Password</h3>
-            <p id="modal-description">Enter a password to encrypt this spreadsheet. Anyone with the link will need this
-                password to view it.</p>
-            <div class="modal-form">
-                <input type="password" id="password-input" placeholder="Enter password" autocomplete="new-password">
-                <input type="password" id="password-confirm" placeholder="Confirm password" autocomplete="new-password">
-            </div>
-            <p id="modal-error" class="modal-error hidden"></p>
-            <div class="modal-buttons">
-                <button id="modal-cancel" type="button" class="modal-btn modal-btn-secondary">Cancel</button>
-                <button id="modal-submit" type="button" class="modal-btn modal-btn-primary">Set Password</button>
-            </div>
+  <div id="password-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="password-title">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <header class="modal-header">
+        <h3 id="password-title">Unlock calendar</h3>
+        <button id="password-close" type="button" class="icon-btn" aria-label="Close">x</button>
+      </header>
+      <div class="modal-form">
+        <p id="password-desc" class="modal-note"></p>
+        <label class="field">
+          <span>Password</span>
+          <input id="password-input" type="password" autocomplete="new-password">
+        </label>
+        <label id="password-confirm-field" class="field hidden">
+          <span>Confirm password</span>
+          <input id="password-confirm" type="password" autocomplete="new-password">
+        </label>
+        <p id="password-error" class="modal-error hidden"></p>
+        <div class="modal-actions">
+          <button id="password-cancel" type="button" class="ghost">Cancel</button>
+          <button id="password-submit" type="button" class="primary">Unlock</button>
         </div>
+      </div>
     </div>
+  </div>
 
-    <!-- Embed Code Modal -->
-    <div id="embed-modal" class="modal hidden">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content">
-            <h3>Embed This Spreadsheet</h3>
-            <p>Copy this code to embed the spreadsheet on your website:</p>
-            <div class="embed-code-container">
-                <textarea id="embed-code-textarea" readonly></textarea>
-            </div>
-            <div class="modal-buttons">
-                <button id="embed-copy-btn" type="button" class="modal-btn modal-btn-primary">
-                    <i class="fa-solid fa-copy"></i> Copy to Clipboard
-                </button>
-                <button id="embed-close-btn" type="button" class="modal-btn modal-btn-secondary">Close</button>
-            </div>
-        </div>
-    </div>
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
-    <!-- JSON Editor Modal -->
-    <div id="json-modal" class="modal hidden">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content json-modal-content">
-            <div class="json-modal-header">
-                <h3>Raw Data (AI Bridge)</h3>
-                <button id="json-close-btn" type="button" class="modal-icon-btn" aria-label="Close JSON editor">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <p class="json-modal-subtitle">Copy this JSON to an AI to modify data.</p>
-            <div class="json-editor-wrapper">
-                <textarea id="json-editor" spellcheck="false"></textarea>
-            </div>
-            <div class="json-modal-actions">
-                <button id="json-copy-btn" type="button" class="modal-btn modal-btn-secondary">
-                    <i class="fa-solid fa-copy"></i> Copy JSON
-                </button>
-            </div>
-
-            <button type="button" class="hash-tool-docs-toggle" id="json-docs-toggle">Show Schema Reference</button>
-            <div class="hash-tool-docs" id="json-docs">
-                <h4>Minified Schema Reference</h4>
-                <ul class="doc-list">
-                    <li><span class="doc-code">r</span> Row count</li>
-                    <li><span class="doc-code">c</span> Column count</li>
-                    <li><span class="doc-code">t</span> Theme (light/dark)</li>
-                    <li><span class="doc-code">d</span> Data (sparse [row, col, value])</li>
-                    <li><span class="doc-code">f</span> Formulas (sparse [row, col, formula])</li>
-                    <li><span class="doc-code">s</span> Styles (minified keys)</li>
-                    <li><span class="doc-code">w</span> Column widths</li>
-                </ul>
-            </div>
-            <p id="json-error" class="modal-error hidden"></p>
-        </div>
-    </div>
-
-    <!-- JSON Hash Tool Modal -->
-    <div id="hash-tool-modal" class="modal hidden">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content hash-tool-modal-content">
-            <div class="json-modal-header">
-                <h3>JSON Hash Tool</h3>
-                <button id="hash-tool-close-btn" type="button" class="modal-icon-btn" aria-label="Close JSON hash tool">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <p class="hash-tool-subtitle">Convert JSON to a shareable URL hash or decode a hash back to JSON. Encrypted
-                ENC: hashes require a password and cannot be decoded here.</p>
-            <div class="hash-tool-mode">
-                <button type="button" class="hash-tool-mode-btn active" data-mode="json-to-hash">JSON to Hash</button>
-                <button type="button" class="hash-tool-mode-btn" data-mode="hash-to-json">Hash to JSON</button>
-            </div>
-            <div class="hash-tool-grid">
-                <div class="hash-tool-section">
-                    <label for="hash-tool-input" id="hash-tool-input-label">JSON Input</label>
-                    <textarea id="hash-tool-input" spellcheck="false"
-                        placeholder="Paste JSON here (use Copy JSON from the app for the shortest links)."></textarea>
-                </div>
-                <div class="hash-tool-section">
-                    <label for="hash-tool-output" id="hash-tool-output-label">URL Hash</label>
-                    <textarea id="hash-tool-output" readonly placeholder="Output will appear here..."></textarea>
-                </div>
-            </div>
-            <div class="hash-tool-actions">
-                <button id="hash-tool-action-btn" type="button" class="modal-btn modal-btn-primary">Copy Link</button>
-            </div>
-            <div class="hash-tool-stats">
-                <div class="hash-tool-stat">Input: <span id="hash-tool-input-len">0</span> chars</div>
-                <div class="hash-tool-stat">Output: <span id="hash-tool-output-len">0</span> chars</div>
-                <div class="hash-tool-stat">Ratio: <span id="hash-tool-ratio">-</span></div>
-            </div>
-
-            <button type="button" class="hash-tool-docs-toggle" id="hash-tool-docs-toggle">Show Schema
-                Reference</button>
-            <div class="hash-tool-docs" id="hash-tool-docs">
-                <h4>Minified Schema Reference</h4>
-                <ul class="doc-list">
-                    <li><span class="doc-code">r</span> Row count</li>
-                    <li><span class="doc-code">c</span> Column count</li>
-                    <li><span class="doc-code">t</span> Theme (light/dark)</li>
-                    <li><span class="doc-code">d</span> Data (sparse [row, col, value])</li>
-                    <li><span class="doc-code">f</span> Formulas (sparse [row, col, formula])</li>
-                    <li><span class="doc-code">s</span> Styles (minified keys)</li>
-                    <li><span class="doc-code">w</span> Column widths</li>
-                </ul>
-            </div>
-            <p id="hash-tool-error" class="modal-error hidden"></p>
-        </div>
-    </div>
-
-    <!-- Collaboration Modal -->
-    <div id="p2p-modal" class="modal hidden">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content">
-            <h3>Live Collaboration (Beta)</h3>
-            <p>Share your session live without saving to a server.</p>
-            <div id="p2p-host-view" class="p2p-section">
-                <button id="p2p-start-host" class="modal-btn modal-btn-primary p2p-btn-full" type="button"><i
-                        class="fa-solid fa-wifi"></i> Start Hosting</button>
-                <div id="p2p-id-display" class="p2p-id-display hidden">
-                    <p class="p2p-label">Your Peer ID (share this):</p>
-                    <div class="p2p-id-row">
-                        <input type="text" id="p2p-my-id" class="p2p-input" readonly>
-                        <button id="p2p-copy-id" class="modal-icon-btn" type="button" aria-label="Copy ID"><i
-                                class="fa-solid fa-copy"></i></button>
-                    </div>
-                </div>
-            </div>
-            <div class="p2p-divider">- OR -</div>
-            <div id="p2p-join-view" class="p2p-section">
-                <input type="text" id="p2p-remote-id" class="p2p-input" placeholder="Enter Host Peer ID">
-                <button id="p2p-join-btn" class="modal-btn modal-btn-secondary p2p-btn-full" type="button"><i
-                        class="fa-solid fa-plug"></i> Join Session</button>
-            </div>
-            <p class="p2p-status" id="p2p-status">Waiting for connection...</p>
-            <div class="modal-buttons">
-                <button id="p2p-close-btn" type="button" class="modal-btn modal-btn-secondary">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- QR Code Modal -->
-    <div id="qr-modal" class="modal hidden">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content qr-modal-content">
-            <h3>Open on Mobile</h3>
-            <p>Scan this code to continue on your phone.</p>
-            <div class="qr-card">
-                <div id="qrcode-container" class="qr-code"></div>
-            </div>
-            <p id="qr-warning" class="qr-warning hidden"></p>
-            <div class="modal-buttons">
-                <button id="qr-close-btn" type="button" class="modal-btn modal-btn-secondary">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Template Gallery Modal -->
-    <div id="templates-modal" class="modal hidden">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content templates-modal-content">
-            <div class="modal-header">
-                <h3><i class="fa-solid fa-table-cells-large"></i> Template Gallery</h3>
-                <button id="templates-close-btn" type="button" class="modal-icon-btn" aria-label="Close gallery">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <div class="template-search-container">
-                <i class="fa-solid fa-search search-icon"></i>
-                <input type="text" id="template-search-input" placeholder="Search templates..." autocomplete="off">
-            </div>
-            <p class="modal-subtitle">Start with a pre-built spreadsheet.</p>
-            <div id="templates-gallery" class="templates-gallery-container">
-                <!-- Templates will be loaded here -->
-            </div>
-        </div>
-    </div>
-
-    <!-- Tools Modal -->
-    <div id="tools-modal" class="modal hidden">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content tools-modal-content">
-            <div class="tools-modal-header">
-                <h3><i class="fa-solid fa-layer-group"></i> All Tools</h3>
-                <button id="tools-close-btn" type="button" class="modal-icon-btn"><i
-                        class="fa-solid fa-xmark"></i></button>
-            </div>
-
-            <div class="tools-grid">
-                <!-- Section: View -->
-                <div class="tools-section">
-                    <h4>View</h4>
-                    <div class="tools-list">
-                        <button id="toggle-readonly" type="button" class="tool-item"><i
-                                class="fa-solid fa-pen-to-square"></i> Toggle Read-only</button>
-                    </div>
-                </div>
-
-                <!-- Section: Data & File -->
-                <div class="tools-section">
-                    <h4>Data & File</h4>
-                    <div class="tools-list">
-                        <button id="open-templates-btn" type="button" class="tool-item"><i
-                                class="fa-solid fa-table-cells-large"></i> Template Gallery</button>
-                        <button id="import-csv" type="button" class="tool-item"><i class="fa-solid fa-file-import"></i>
-                            Import CSV</button>
-                        <button id="export-csv" type="button" class="tool-item"><i class="fa-solid fa-file-csv"></i>
-                            Export CSV</button>
-                        <button id="export-excel" type="button" class="tool-item"><i class="fa-solid fa-file-excel"></i>
-                            Export Excel</button>
-                        <button id="open-json-btn" type="button" class="tool-item"><i class="fa-solid fa-file-code"></i>
-                            Copy JSON</button>
-                        <button id="open-hash-tool-btn" type="button" class="tool-item"><i
-                                class="fa-solid fa-hashtag"></i>
-                            JSON Hash Tool</button>
-                    </div>
-                </div>
-
-                <!-- Section: Share & Embed -->
-                <div class="tools-section">
-                    <h4>Share & Embed</h4>
-                    <div class="tools-list">
-                        <button id="copy-url" type="button" class="tool-item"><i class="fa-solid fa-copy"></i> Copy
-                            Link</button>
-                        <button id="qr-btn" type="button" class="tool-item"><i class="fa-solid fa-qrcode"></i> QR
-                            Code</button>
-                        <button id="generate-embed" type="button" class="tool-item"><i class="fa-solid fa-code"></i>
-                            Embed Code</button>
-                        <button id="present-btn" type="button" class="tool-item"><i class="fa-solid fa-tv"></i>
-                            Presentation Mode</button>
-                    </div>
-                </div>
-
-                <!-- Section: Advanced -->
-                <div class="tools-section">
-                    <h4>Advanced</h4>
-                    <div class="tools-list">
-                        <button id="p2p-btn" type="button" class="tool-item"><i class="fa-solid fa-users"></i> Live
-                            Collaboration</button>
-                        <button id="trace-deps-btn" type="button" class="tool-item"><i
-                                class="fa-solid fa-diagram-project"></i> Trace Dependencies</button>
-                        <button id="lock-btn" type="button" class="tool-item"><i class="fa-solid fa-lock-open"></i>
-                            Password Protect</button>
-                    </div>
-                </div>
-            </div>
-            <!-- Hidden file input moved here -->
-            <input id="import-csv-file" type="file" accept=".csv,text/csv" hidden>
-        </div>
-    </div>
-
-    <!-- Toast Notifications Container -->
-    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
-
-    <script src="lib/peerjs.min.js"></script>
-    <script src="lib/qrcode.min.js"></script>
-    <script src="lib/lz-string.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
-    <script type="module" src="script.js"></script>
+  <script src="lib/lz-string.min.js"></script>
+  <script type="module" src="script.js"></script>
 </body>
-
 </html>
