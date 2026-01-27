@@ -48,11 +48,14 @@ async function fetchIceServers() {
 
 const defaultCallbacks = {
   onHostReady: () => {},
+  onPeerReady: () => {},
   onConnectionOpened: () => {},
   onInitialSync: () => {},
   onRemoteCellUpdate: () => {},
   onRemoteCursorMove: () => {},
   onSyncRequest: () => {},
+  onPeerHello: () => {},
+  onPeerActivity: () => {},
   onConnectionClosed: () => {},
   onConnectionError: () => {},
 };
@@ -121,7 +124,11 @@ export const P2PManager = {
    * Clear remote cursor highlighting from all cells
    */
   clearRemoteCursor() {
-    document.querySelectorAll(`.${remoteCursorClass}`).forEach((el) => el.classList.remove(remoteCursorClass));
+    document.querySelectorAll(`.${remoteCursorClass}`).forEach((el) => {
+      el.classList.remove(remoteCursorClass);
+      el.style.removeProperty("--peer-color");
+      el.removeAttribute("data-peer");
+    });
   },
 
   canSend() {
@@ -144,6 +151,7 @@ export const P2PManager = {
 
     this.peer.on("open", (id) => {
       this.myPeerId = id;
+      this.callbacks.onPeerReady(id, true);
       this.callbacks.onHostReady(id);
     });
 
@@ -188,7 +196,9 @@ export const P2PManager = {
     const iceConfig = await fetchIceServers();
     this.peer = new PeerCtor({ config: iceConfig });
 
-    this.peer.on("open", () => {
+    this.peer.on("open", (id) => {
+      this.myPeerId = id;
+      this.callbacks.onPeerReady(id, false);
       const conn = this.peer.connect(hostId);
       this.handleConnection(conn);
     });
@@ -245,6 +255,12 @@ export const P2PManager = {
       case "SYNC_REQUEST":
         this.callbacks.onSyncRequest();
         break;
+      case "PEER_HELLO":
+        this.callbacks.onPeerHello(payload.data || {});
+        break;
+      case "PEER_ACTIVITY":
+        this.callbacks.onPeerActivity(payload.data || {});
+        break;
       default:
         console.warn("Unknown P2P message:", type);
     }
@@ -277,15 +293,23 @@ export const P2PManager = {
   broadcastCellUpdate(row, col, value, formula) {
     return this.sendPayload({
       type: "UPDATE_CELL",
-      data: { row, col, value, formula },
+      data: { row, col, value, formula, senderId: this.myPeerId },
     });
   },
 
   broadcastCursor(row, col, color) {
     return this.sendPayload({
       type: "UPDATE_CURSOR",
-      data: { row, col, color },
+      data: { row, col, color, senderId: this.myPeerId },
     });
+  },
+
+  sendPeerHello(peerMeta) {
+    return this.sendPayload({ type: "PEER_HELLO", data: peerMeta });
+  },
+
+  sendPeerActivity(activity) {
+    return this.sendPayload({ type: "PEER_ACTIVITY", data: activity });
   },
 
   disconnect({ silent = false } = {}) {

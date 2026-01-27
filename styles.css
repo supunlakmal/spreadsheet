@@ -211,6 +211,94 @@ body {
     pointer-events: none;
     opacity: 0;
 }
+
+/* Collaborative presence (avatar stack) */
+.presence-stack {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0;
+    padding: 2px 4px;
+    flex-shrink: 0;
+}
+
+.presence-stack:empty {
+    display: none;
+}
+
+.presence-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--peer-color, var(--accent-color));
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--bg-secondary);
+    margin-left: -8px;
+    position: relative;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.presence-avatar:first-child {
+    margin-left: 0;
+}
+
+.presence-avatar:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    z-index: 2;
+}
+
+.presence-avatar.is-entering {
+    animation: avatarEnter 0.22s ease-out;
+}
+
+.presence-avatar.is-leaving {
+    animation: avatarLeave 0.2s ease-in forwards;
+    pointer-events: none;
+}
+
+.presence-avatar.is-active::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid var(--peer-color, var(--accent-color));
+    opacity: 0.6;
+    animation: avatarPulse 1.3s ease-out infinite;
+    pointer-events: none;
+}
+
+@keyframes avatarEnter {
+    from { opacity: 0; transform: translateX(8px) scale(0.9); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes avatarLeave {
+    from { opacity: 1; transform: scale(1); }
+    to { opacity: 0; transform: scale(0.7); }
+}
+
+@keyframes avatarPulse {
+    0% { transform: scale(0.95); opacity: 0.7; }
+    70% { transform: scale(1.08); opacity: 0; }
+    100% { transform: scale(1.08); opacity: 0; }
+}
+
+@media (max-width: 900px) {
+    .presence-avatar {
+        width: 28px;
+        height: 28px;
+        font-size: 0.7rem;
+        margin-left: -6px;
+    }
+}
 .format-buttons {
     display: flex;
     gap: 4px;
@@ -892,21 +980,23 @@ body.resizing {
 /* Remote user cursor */
 .cell.remote-active {
     position: relative;
-    border: 2px solid #ff0055 !important;
+    border: 2px solid var(--peer-color, #ff0055) !important;
     z-index: 20;
 }
 
 .cell.remote-active::after {
-    content: "Peer";
+    content: attr(data-peer);
     position: absolute;
     top: -18px;
     right: -2px;
-    background: #ff0055;
+    background: var(--peer-color, #ff0055);
     color: #ffffff;
     font-size: 10px;
     padding: 1px 4px;
     border-radius: 3px 3px 0 0;
     pointer-events: none;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 
 /* Formula suggestions dropdown */

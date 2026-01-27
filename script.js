@@ -110,6 +110,14 @@ import {
   let fullSyncTimer = null;
   const FULL_SYNC_DELAY = 300;
   const REMOTE_CURSOR_CLASS = "remote-active";
+  const LEGACY_REMOTE_ID = "remote-peer";
+  const PEER_ACTIVITY_THROTTLE = 800;
+  const PEER_ACTIVITY_DECAY = 1600;
+  let presenceStackEl = null;
+  let lastActivitySentAt = 0;
+  let localPeerMeta = null;
+  const presencePeers = new Map();
+  const presenceActivityTimers = new Map();
 
   const p2pUI = {
     modal: null,
@@ -448,6 +456,7 @@ import {
       if (canBroadcastP2P()) {
         P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
       }
+      notifyLocalActivity(row, col);
       SelectionStatusManager.updateStatusBar();
       if (previousFormula !== formulas[row][col]) {
         scheduleDependencyDraw();
@@ -499,7 +508,8 @@ import {
     }
 
     if (canBroadcastP2P()) {
-      P2PManager.broadcastCursor(row, col, "#ff0055");
+      const cursorColor = localPeerMeta ? localPeerMeta.color : "#ff0055";
+      P2PManager.broadcastCursor(row, col, cursorColor);
     }
   }
 
@@ -516,6 +526,10 @@ import {
     const { isSelecting, rows, cols } = getState();
     if (formulaEditMode && isSelecting) {
       return;
+    }
+
+    if (!isNaN(row) && !isNaN(col)) {
+      notifyLocalActivityEnd(row, col);
     }
 
     // Evaluate formula when blurred
@@ -578,6 +592,226 @@ import {
     clearActiveHeaders();
   }
 
+  function stringToColor(str) {
+    if (!str) return "#888888";
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hex = (hash & 0x00ffffff).toString(16).toUpperCase().padStart(6, "0");
+    return `#${hex}`;
+  }
+
+  function buildInitials(label) {
+    if (!label) return "??";
+    const cleaned = String(label).replace(/[^a-zA-Z0-9]/g, "");
+    if (!cleaned) return "??";
+    if (cleaned.length === 1) return `${cleaned}${cleaned}`.toUpperCase();
+    return cleaned.slice(0, 2).toUpperCase();
+  }
+
+  function buildPeerMeta({ peerId, name, isLocal = false } = {}) {
+    const resolvedId = peerId || LEGACY_REMOTE_ID;
+    const displayName = name || resolvedId;
+    return {
+      id: resolvedId,
+      name: displayName,
+      color: stringToColor(resolvedId),
+      initials: buildInitials(displayName),
+      isLocal,
+    };
+  }
+
+  function ensurePresenceStack() {
+    if (!presenceStackEl) {
+      presenceStackEl = document.getElementById("presence-stack");
+    }
+    return presenceStackEl;
+  }
+
+  function upsertPeer(peerMeta) {
+    const stack = ensurePresenceStack();
+    if (!stack || !peerMeta || !peerMeta.id) return;
+
+    const existing = presencePeers.get(peerMeta.id);
+    if (existing) {
+      existing.name = peerMeta.name || existing.name;
+      existing.color = peerMeta.color || existing.color;
+      existing.initials = peerMeta.initials || existing.initials;
+      if (typeof peerMeta.isLocal === "boolean") {
+        existing.isLocal = peerMeta.isLocal;
+      }
+      if (existing.el) {
+        existing.el.style.setProperty("--peer-color", existing.color);
+        existing.el.textContent = existing.initials;
+        existing.el.title = existing.name;
+        existing.el.setAttribute("aria-label", existing.name);
+        existing.el.classList.toggle("is-local", !!existing.isLocal);
+        existing.el.style.order = existing.isLocal ? "0" : "1";
+      }
+      return;
+    }
+
+    const avatar = document.createElement("div");
+    avatar.className = "presence-avatar is-entering";
+    avatar.dataset.peerId = peerMeta.id;
+    avatar.style.setProperty("--peer-color", peerMeta.color);
+    avatar.textContent = peerMeta.initials;
+    avatar.title = peerMeta.name;
+    avatar.setAttribute("aria-label", peerMeta.name);
+    avatar.setAttribute("role", "listitem");
+    avatar.style.order = peerMeta.isLocal ? "0" : "1";
+    if (peerMeta.isLocal) {
+      avatar.classList.add("is-local");
+    }
+    avatar.addEventListener(
+      "animationend",
+      () => {
+        avatar.classList.remove("is-entering");
+      },
+      { once: true }
+    );
+    stack.appendChild(avatar);
+
+    presencePeers.set(peerMeta.id, {
+      ...peerMeta,
+      el: avatar,
+      isActive: false,
+    });
+  }
+
+  function removePeer(peerId) {
+    const peer = presencePeers.get(peerId);
+    if (!peer) return;
+
+    if (peer.el) {
+      peer.el.classList.add("is-leaving");
+      peer.el.addEventListener(
+        "animationend",
+        () => {
+          if (peer.el && peer.el.parentNode) {
+            peer.el.parentNode.removeChild(peer.el);
+          }
+        },
+        { once: true }
+      );
+    }
+
+    presencePeers.delete(peerId);
+    if (presenceActivityTimers.has(peerId)) {
+      clearTimeout(presenceActivityTimers.get(peerId));
+      presenceActivityTimers.delete(peerId);
+    }
+  }
+
+  function clearPresence() {
+    presencePeers.forEach((peer) => {
+      if (peer.el && peer.el.parentNode) {
+        peer.el.parentNode.removeChild(peer.el);
+      }
+    });
+    presencePeers.clear();
+    presenceActivityTimers.forEach((timer) => clearTimeout(timer));
+    presenceActivityTimers.clear();
+    localPeerMeta = null;
+    lastActivitySentAt = 0;
+  }
+
+  function removeRemotePeers() {
+    presencePeers.forEach((peer, peerId) => {
+      if (!peer.isLocal) {
+        removePeer(peerId);
+      }
+    });
+  }
+
+  function setPeerActive(peerId, active, { decay = false } = {}) {
+    const peer = presencePeers.get(peerId);
+    if (!peer || !peer.el) return;
+
+    if (active) {
+      peer.el.classList.add("is-active");
+    } else {
+      peer.el.classList.remove("is-active");
+    }
+
+    if (presenceActivityTimers.has(peerId)) {
+      clearTimeout(presenceActivityTimers.get(peerId));
+      presenceActivityTimers.delete(peerId);
+    }
+
+    if (active && decay) {
+      const timer = setTimeout(() => {
+        setPeerActive(peerId, false);
+      }, PEER_ACTIVITY_DECAY);
+      presenceActivityTimers.set(peerId, timer);
+    }
+  }
+
+  function markPeerActivity(peerId) {
+    const resolvedId = peerId || LEGACY_REMOTE_ID;
+    if (!presencePeers.has(resolvedId)) {
+      upsertPeer(buildPeerMeta({ peerId: resolvedId }));
+    }
+    setPeerActive(resolvedId, true, { decay: true });
+  }
+
+  function registerLocalPeer(peerId) {
+    if (!peerId) return;
+    if (localPeerMeta && localPeerMeta.id !== peerId) {
+      clearPresence();
+    }
+    localPeerMeta = buildPeerMeta({ peerId, name: peerId, isLocal: true });
+    upsertPeer(localPeerMeta);
+  }
+
+  function sendPeerHello() {
+    if (!P2PManager.canSend() || !P2PManager.myPeerId) return;
+    const displayName = localPeerMeta ? localPeerMeta.name : P2PManager.myPeerId;
+    P2PManager.sendPeerHello({ peerId: P2PManager.myPeerId, name: displayName });
+  }
+
+  function handlePeerHello({ peerId, name } = {}) {
+    if (!peerId) return;
+    const isLocal = peerId === P2PManager.myPeerId;
+    upsertPeer(buildPeerMeta({ peerId, name, isLocal }));
+  }
+
+  function handlePeerActivity({ peerId, active } = {}) {
+    const resolvedId = peerId || LEGACY_REMOTE_ID;
+    if (!presencePeers.has(resolvedId)) {
+      upsertPeer(buildPeerMeta({ peerId: resolvedId }));
+    }
+    if (active === false) {
+      setPeerActive(resolvedId, false);
+      return;
+    }
+    setPeerActive(resolvedId, true, { decay: true });
+  }
+
+  function notifyLocalActivity(row, col) {
+    const peerId = P2PManager.myPeerId;
+    if (!peerId) return;
+    if (!localPeerMeta) {
+      registerLocalPeer(peerId);
+    }
+    setPeerActive(peerId, true, { decay: true });
+
+    if (!P2PManager.canSend()) return;
+    const now = Date.now();
+    if (now - lastActivitySentAt < PEER_ACTIVITY_THROTTLE) return;
+    lastActivitySentAt = now;
+    P2PManager.sendPeerActivity({ peerId, active: true, row, col });
+  }
+
+  function notifyLocalActivityEnd(row, col) {
+    const peerId = P2PManager.myPeerId;
+    if (!peerId) return;
+    setPeerActive(peerId, false);
+    if (!P2PManager.canSend()) return;
+    P2PManager.sendPeerActivity({ peerId, active: false, row, col });
+  }
+
   // ========== P2P Collaboration ==========
 
   function canBroadcastP2P() {
@@ -611,6 +845,10 @@ import {
 
   function handleP2PConnection(amIHost) {
     hasInitialSync = amIHost;
+    if (P2PManager.myPeerId) {
+      registerLocalPeer(P2PManager.myPeerId);
+    }
+    sendPeerHello();
     if (amIHost) {
       recalculateFormulas();
       const fullState = buildCurrentState();
@@ -645,7 +883,7 @@ import {
     showToast("Synced with host!", "success");
   }
 
-  function handleRemoteCellUpdate({ row, col, value, formula }) {
+  function handleRemoteCellUpdate({ row, col, value, formula, senderId }) {
     const rowIndex = parseInt(row, 10);
     const colIndex = parseInt(col, 10);
     if (isNaN(rowIndex) || isNaN(colIndex)) return;
@@ -654,6 +892,11 @@ import {
     if (rowIndex < 0 || colIndex < 0 || rowIndex >= rows || colIndex >= cols) {
       P2PManager.requestFullSync();
       return;
+    }
+
+    const resolvedSenderId = senderId || LEGACY_REMOTE_ID;
+    if (resolvedSenderId) {
+      markPeerActivity(resolvedSenderId);
     }
 
     const rawValue = value === undefined || value === null ? "" : String(value);
@@ -688,7 +931,7 @@ import {
     isRemoteUpdate = false;
   }
 
-  function handleRemoteCursor({ row, col }) {
+  function handleRemoteCursor({ row, col, senderId, color }) {
     const rowIndex = parseInt(row, 10);
     const colIndex = parseInt(col, 10);
     if (isNaN(rowIndex) || isNaN(colIndex)) return;
@@ -696,11 +939,28 @@ import {
     const { rows, cols } = getState();
     if (rowIndex < 0 || colIndex < 0 || rowIndex >= rows || colIndex >= cols) return;
 
+    const resolvedSenderId = senderId || LEGACY_REMOTE_ID;
+    if (!presencePeers.has(resolvedSenderId)) {
+      const meta = buildPeerMeta({ peerId: resolvedSenderId });
+      if (!senderId && isValidCSSColor(color)) {
+        meta.color = color;
+      }
+      upsertPeer(meta);
+    }
+    const peer = presencePeers.get(resolvedSenderId);
+
     P2PManager.clearRemoteCursor();
     const cell = getCellElement(rowIndex, colIndex);
     if (cell) {
       cell.classList.add(REMOTE_CURSOR_CLASS);
+      if (peer) {
+        cell.style.setProperty("--peer-color", peer.color);
+        cell.dataset.peer = peer.initials;
+      } else {
+        cell.dataset.peer = "PE";
+      }
     }
+    markPeerActivity(resolvedSenderId);
   }
 
   function handleSyncRequest() {
@@ -712,6 +972,11 @@ import {
   function handleP2PDisconnect() {
     hasInitialSync = false;
     P2PManager.clearRemoteCursor();
+    if (P2PManager.myPeerId) {
+      removeRemotePeers();
+    } else {
+      clearPresence();
+    }
     P2PManager.resetControls();
     P2PManager.setStatus("Disconnected.");
     showToast("Peer disconnected", "warning");
@@ -1173,6 +1438,9 @@ import {
     P2PManager.init({
       p2pUI,
       remoteCursorClass: REMOTE_CURSOR_CLASS,
+      onPeerReady: (id) => {
+        registerLocalPeer(id);
+      },
       onHostReady: (id) => {
         if (p2pUI.myIdInput) {
           p2pUI.myIdInput.value = id;
@@ -1187,8 +1455,11 @@ import {
       onRemoteCellUpdate: handleRemoteCellUpdate,
       onRemoteCursorMove: handleRemoteCursor,
       onSyncRequest: handleSyncRequest,
+      onPeerHello: handlePeerHello,
+      onPeerActivity: handlePeerActivity,
       onConnectionClosed: handleP2PDisconnect,
       onConnectionError: () => {
+        clearPresence();
         P2PManager.resetControls();
         P2PManager.setStatus("Connection error.");
       },
@@ -1598,6 +1869,7 @@ import {
     p2pUI.statusEl = document.getElementById("p2p-status");
     p2pUI.myIdInput = document.getElementById("p2p-my-id");
     p2pUI.remoteIdInput = document.getElementById("p2p-remote-id");
+    presenceStackEl = document.getElementById("presence-stack");
     const p2pCloseBtn = document.getElementById("p2p-close-btn");
     const p2pBackdrop = document.querySelector("#p2p-modal .modal-backdrop");
 
