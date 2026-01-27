@@ -1,5 +1,5 @@
-import { readStateFromHash, writeStateToHash, isEncryptedHash } from "./hashcal/modules/urlManager.js";
-import { expandEvents } from "./hashcal/modules/recurrenceEngine.js";
+import { readStateFromHash, writeStateToHash, isEncryptedHash } from "./modules/hashcalUrlManager.js";
+import { expandEvents } from "./modules/recurrenceEngine.js";
 import {
   formatDateKey,
   getMonthGridRange,
@@ -8,8 +8,8 @@ import {
   renderTimeGrid,
   renderWeekdayHeaders,
   renderYearView,
-} from "./hashcal/modules/calendarRender.js";
-import { parseIcs } from "./hashcal/modules/icsImporter.js";
+} from "./modules/calendarRender.js";
+import { parseIcs } from "./modules/icsImporter.js";
 
 const DEFAULT_COLORS = ["#ff6b6b", "#ffd43b", "#4dabf7", "#63e6be", "#9775fa"];
 const DEFAULT_STATE = {
