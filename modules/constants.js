@@ -55,6 +55,7 @@ export const STYLE_KEY_MAP_REVERSE = Object.fromEntries(Object.entries(STYLE_KEY
 export const FORMULA_SUGGESTIONS = [
   { name: "SUM", signature: "SUM(range)", description: "Adds numbers in a range" },
   { name: "AVG", signature: "AVG(range)", description: "Average of numbers in a range" },
+  { name: "CHART", signature: "CHART(1,2,3)", description: "Inline sparkline from numbers" },
 ];
 
 // Valid formula patterns (security whitelist)
@@ -64,6 +65,7 @@ export const VALID_FORMULA_PATTERNS = [
   /^=\s*PROGRESS\s*\(\s*[^)]+\s*\)\s*$/i,
   /^=\s*TAG\s*\(\s*[^)]+\s*\)\s*$/i,
   /^=\s*RATING\s*\(\s*[^)]+\s*\)\s*$/i,
+  /^=\s*CHART\s*\(\s*[^)]+\s*\)\s*$/i,
 ];
 
 export const FONT_SIZE_OPTIONS = [10, 12, 14, 16, 18, 24];

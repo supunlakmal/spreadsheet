@@ -12,6 +12,7 @@
     --border-hover: #999;
     --accent-color: #4a90d9;
     --accent-hover: #3a7bc8;
+    --primary-color: var(--accent-color);
     --cell-focus-shadow: rgba(74, 144, 217, 0.4);
     --selection-bg: rgba(74, 144, 217, 0.12);
     --selection-border: #4a90d9;
@@ -40,6 +41,7 @@
     --border-hover: #505050;
     --accent-color: #5a9fe9;
     --accent-hover: #4a8fd9;
+    --primary-color: var(--accent-color);
     --cell-focus-shadow: rgba(90, 159, 233, 0.35);
     --selection-bg: rgba(90, 159, 233, 0.15);
     --selection-border: #5a9fe9;
@@ -737,6 +739,7 @@ body.resizing {
     margin: -1px 0 0 -1px;
     transition: border-color 0.3s, background-color 0.3s;
     background-color: var(--cell-bg, var(--bg-secondary));
+    position: relative;
 }
 
 
@@ -760,6 +763,35 @@ body.resizing {
     transition: background-color 0.3s, color 0.3s;
     overflow: hidden;
     word-wrap: break-word;
+}
+
+.cell.has-sparkline .cell-content {
+    opacity: 0.3;
+    position: relative;
+    z-index: 1;
+}
+
+.cell.has-sparkline:has(.cell-content:focus) .cell-content {
+    opacity: 1;
+}
+
+.sparkline-layer {
+    position: absolute;
+    inset: 4px 6px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.9;
+    transition: opacity 0.2s ease;
+}
+
+.cell.has-sparkline:has(.cell-content:focus) .sparkline-layer {
+    opacity: 0;
+}
+
+.sparkline-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
 }
 
 .cell-content:focus {

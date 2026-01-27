@@ -71,7 +71,7 @@ export function buildRangeRef(startRow, startCol, endRow, endCol) {
   return buildCellRef(minRow, minCol) + ":" + buildCellRef(maxRow, maxCol);
 }
 
-const VISUAL_FORMULA_REGEX = /^=\s*(PROGRESS|TAG|RATING)\s*\((.*)\)\s*$/i;
+const VISUAL_FORMULA_REGEX = /^=\s*(PROGRESS|TAG|RATING|CHART)\s*\((.*)\)\s*$/i;
 
 export function isVisualFormula(formula) {
   if (!formula || typeof formula !== "string") return false;

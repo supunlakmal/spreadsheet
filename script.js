@@ -3,7 +3,7 @@
 
 // Import constants from ES6 module
 import { DEBOUNCE_DELAY, DEFAULT_COLS, DEFAULT_ROWS, MAX_COLS, MAX_ROWS } from "./modules/constants.js";
-import { buildRangeRef, FormulaDropdownManager, FormulaEvaluator, isValidFormula } from "./modules/formulaManager.js";
+import { buildRangeRef, FormulaDropdownManager, FormulaEvaluator, isValidFormula, isVisualFormula } from "./modules/formulaManager.js";
 import { DependencyTracer } from "./modules/dependencyTracer.js";
 import { PasswordManager } from "./modules/passwordManager.js";
 import { CSVManager } from "./modules/csvManager.js";
@@ -19,6 +19,7 @@ import { UIModeManager } from "./modules/uiModeManager.js";
 import { QRCodeManager } from "./modules/qrCodeManager.js";
 import { CellFormattingManager } from "./modules/cellFormattingManager.js";
 import { SelectionStatusManager } from "./modules/selectionStatusManager.js";
+import { getSparklineDisplayText } from "./modules/visualFunctions.js";
 import {
   addColumn,
   addRow,
@@ -44,6 +45,7 @@ import {
   setActiveHeaders,
   setCallbacks,
   setState,
+  updateSparklineForCellElement,
   updateSelectionVisuals,
   insertRowAt,
   insertColumnAt,
@@ -213,6 +215,9 @@ import {
         for (let c = 0; c < cols; c++) {
           const formula = formulas[r][c];
           if (formula && formula.startsWith("=")) {
+            if (isVisualFormula(formula)) {
+              continue;
+            }
             const result = String(FormulaEvaluator.evaluate(formula, { getCellValue, data, rows, cols }));
             if (data[r][c] !== result) {
               data[r][c] = result;
@@ -237,6 +242,7 @@ import {
           const isEditingFormula = cellContent === activeElement && cellContent.innerText.trim().startsWith("=");
           if (!isEditingFormula) {
             cellContent.innerText = data[r][c];
+            updateSparklineForCellElement(cellContent, data[r][c], formula);
           }
         }
       }
@@ -488,21 +494,38 @@ import {
       if (rawValue.startsWith("=")) {
         // NOW evaluate the formula
         formulas[row][col] = rawValue;
-        const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
-        data[row][col] = String(result);
-        target.innerText = String(result);
+        const sparklineDisplay = getSparklineDisplayText(rawValue);
+        if (sparklineDisplay) {
+          data[row][col] = sparklineDisplay;
+          target.innerText = sparklineDisplay;
+          debouncedUpdateURL();
+          SelectionStatusManager.updateStatusBar();
+          if (canBroadcastP2P()) {
+            P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
+          }
+          if (previousFormula !== formulas[row][col]) {
+            scheduleDependencyDraw();
+          }
+        } else {
+          const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
+          data[row][col] = String(result);
+          target.innerText = String(result);
 
-        // Recalculate all dependent formulas
-        recalculateFormulas();
-        debouncedUpdateURL();
-        SelectionStatusManager.updateStatusBar();
-        if (canBroadcastP2P()) {
-          P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
-        }
-        if (previousFormula !== formulas[row][col]) {
-          scheduleDependencyDraw();
+          // Recalculate all dependent formulas
+          recalculateFormulas();
+          debouncedUpdateURL();
+          SelectionStatusManager.updateStatusBar();
+          if (canBroadcastP2P()) {
+            P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
+          }
+          if (previousFormula !== formulas[row][col]) {
+            scheduleDependencyDraw();
+          }
         }
       }
+
+      const sparklineValue = data[row] ? data[row][col] : rawValue;
+      updateSparklineForCellElement(target, sparklineValue, formulas[row] ? formulas[row][col] : "");
     }
 
     // Exit formula edit mode when focus truly leaves
@@ -619,6 +642,7 @@ import {
       } else {
         cellContent.innerHTML = safeValue;
       }
+      updateSparklineForCellElement(cellContent, data[rowIndex][colIndex], formulas[rowIndex][colIndex]);
     }
 
     if (!isFormulaEdit) {
@@ -828,22 +852,38 @@ import {
       if (rawValue.startsWith("=")) {
         const previousFormula = formulas[row] ? formulas[row][col] : "";
         formulas[row][col] = rawValue;
-        const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
-        data[row][col] = String(result);
-        target.innerText = String(result);
-        recalculateFormulas();
-        debouncedUpdateURL();
-        if (canBroadcastP2P()) {
-          P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
-        }
-        if (previousFormula !== formulas[row][col]) {
-          scheduleDependencyDraw();
+        const sparklineDisplay = getSparklineDisplayText(rawValue);
+        if (sparklineDisplay) {
+          data[row][col] = sparklineDisplay;
+          target.innerText = sparklineDisplay;
+          debouncedUpdateURL();
+          if (canBroadcastP2P()) {
+            P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
+          }
+          if (previousFormula !== formulas[row][col]) {
+            scheduleDependencyDraw();
+          }
+        } else {
+          const result = FormulaEvaluator.evaluate(rawValue, { getCellValue, data, rows, cols });
+          data[row][col] = String(result);
+          target.innerText = String(result);
+          recalculateFormulas();
+          debouncedUpdateURL();
+          if (canBroadcastP2P()) {
+            P2PManager.broadcastCellUpdate(row, col, data[row][col], formulas[row][col]);
+          }
+          if (previousFormula !== formulas[row][col]) {
+            scheduleDependencyDraw();
+          }
         }
 
         // Exit formula edit mode
         formulaEditMode = false;
         formulaEditCell = null;
       }
+
+      const sparklineValue = data[row] ? data[row][col] : rawValue;
+      updateSparklineForCellElement(target, sparklineValue, formulas[row] ? formulas[row][col] : "");
 
       // Try to move to cell below
       const nextRow = row + 1;

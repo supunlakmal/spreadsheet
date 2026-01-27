@@ -12,6 +12,10 @@ const COLOR_ALIASES = {
   white: "#ffffff",
 };
 
+const SPARKLINE_VALUE_REGEX = /^-?\d+(?:\.\d+)?(?:\s*,\s*-?\d+(?:\.\d+)?)+$/;
+const SPARKLINE_FORMULA_REGEX = /^=\s*CHART\s*\((.*)\)\s*$/i;
+let sparklineIdCounter = 0;
+
 function splitArgs(raw) {
   if (!raw) return [];
   if (!raw.trim()) return [];
@@ -81,6 +85,113 @@ function extractPlainText(value) {
   const doc = parser.parseFromString("<body>" + String(value) + "</body>", "text/html");
   const text = doc.body.textContent || "";
   return text.replace(/\u00a0/g, " ");
+}
+
+function nextSparklineId() {
+  sparklineIdCounter += 1;
+  return `sparkline-fill-${sparklineIdCounter}`;
+}
+
+function roundCoord(value) {
+  return Math.round(value * 100) / 100;
+}
+
+function buildSmoothPath(points) {
+  if (!points.length) return "";
+  if (points.length === 1) {
+    const point = points[0];
+    return `M ${roundCoord(point.x)} ${roundCoord(point.y)}`;
+  }
+  if (points.length === 2) {
+    return `M ${roundCoord(points[0].x)} ${roundCoord(points[0].y)} L ${roundCoord(points[1].x)} ${roundCoord(points[1].y)}`;
+  }
+
+  const tension = 0.25;
+  let path = `M ${roundCoord(points[0].x)} ${roundCoord(points[0].y)}`;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+
+    const cp1x = p1.x + (p2.x - p0.x) * tension;
+    const cp1y = p1.y + (p2.y - p0.y) * tension;
+    const cp2x = p2.x - (p3.x - p1.x) * tension;
+    const cp2y = p2.y - (p3.y - p1.y) * tension;
+
+    path += ` C ${roundCoord(cp1x)} ${roundCoord(cp1y)}, ${roundCoord(cp2x)} ${roundCoord(cp2y)}, ${roundCoord(p2.x)} ${roundCoord(p2.y)}`;
+  }
+
+  return path;
+}
+
+export function parseSparklineValues(rawValue) {
+  const text = extractPlainText(rawValue).trim();
+  if (!text) return null;
+
+  const match = text.match(SPARKLINE_FORMULA_REGEX);
+  if (!match) return null;
+
+  const payload = match[1].trim();
+  if (!payload || !SPARKLINE_VALUE_REGEX.test(payload)) return null;
+
+  const values = payload.split(",").map((value) => parseFloat(value.trim()));
+  if (values.length < 2) return null;
+  if (values.some((value) => !Number.isFinite(value))) return null;
+  return values;
+}
+
+export function getSparklineDisplayText(rawValue) {
+  const values = parseSparklineValues(rawValue);
+  if (!values) return "";
+  return values.join(", ");
+}
+
+export function buildSparklineSVG(values, options = {}) {
+  if (!Array.isArray(values) || values.length < 2) return "";
+
+  const width = Number.isFinite(options.width) ? options.width : 120;
+  const height = Number.isFinite(options.height) ? options.height : 36;
+  const padding = Number.isFinite(options.padding) ? options.padding : 2;
+  const strokeWidth = Number.isFinite(options.strokeWidth) ? options.strokeWidth : 2;
+  const fillOpacity = Number.isFinite(options.fillOpacity) ? options.fillOpacity : 0.2;
+  const stroke = options.stroke || "var(--primary-color)";
+  const gradientId = options.gradientId || nextSparklineId();
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const innerWidth = Math.max(width - padding * 2, 1);
+  const innerHeight = Math.max(height - padding * 2, 1);
+  const step = innerWidth / (values.length - 1);
+
+  const points = values.map((value, index) => {
+    const x = padding + step * index;
+    const y = padding + innerHeight * (1 - (value - min) / range);
+    return { x, y };
+  });
+
+  const linePath = buildSmoothPath(points);
+  if (!linePath) return "";
+
+  const baseline = padding + innerHeight;
+  const first = points[0];
+  const last = points[points.length - 1];
+  const areaPath = `${linePath} L ${roundCoord(last.x)} ${roundCoord(baseline)} L ${roundCoord(first.x)} ${roundCoord(baseline)} Z`;
+
+  return `
+    <svg class="sparkline-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true" style="color: ${stroke};">
+      <defs>
+        <linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="currentColor" stop-opacity="${fillOpacity}"></stop>
+          <stop offset="100%" stop-color="currentColor" stop-opacity="0"></stop>
+        </linearGradient>
+      </defs>
+      <path d="${areaPath}" fill="url(#${gradientId})"></path>
+      <path d="${linePath}" fill="none" stroke="currentColor" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"></path>
+    </svg>
+  `;
 }
 
 function isCellRef(value) {
@@ -289,6 +400,15 @@ export const VisualFunctions = {
       if (value === null) return null;
       const max = resolveNumberArg(args[1], context);
       return buildRating(value, max);
+    }
+
+    if (name === "CHART") {
+      const values = parseSparklineValues(formula);
+      if (!values) return null;
+      const wrapper = document.createElement("div");
+      wrapper.className = "visual-sparkline";
+      wrapper.innerHTML = buildSparklineSVG(values, { width: 240, height: 80, strokeWidth: 3, fillOpacity: 0.25 });
+      return wrapper;
     }
 
     return null;
