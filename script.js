@@ -20,6 +20,7 @@ import { QRCodeManager } from "./modules/qrCodeManager.js";
 import { CellFormattingManager } from "./modules/cellFormattingManager.js";
 import { SelectionStatusManager } from "./modules/selectionStatusManager.js";
 import { getSparklineDisplayText } from "./modules/visualFunctions.js";
+import { AppLauncher } from "./modules/app_launcher.js";
 import {
   addColumn,
   addRow,
@@ -1522,6 +1523,9 @@ import {
       getDataArray,
       getEmbedModeFlag: () => isEmbedMode,
     });
+
+    // Initialize App Launcher
+    new AppLauncher();
 
     // Load theme preference first (before any rendering)
     ThemeManager.loadTheme();

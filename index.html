@@ -49,7 +49,8 @@
         content="Create and share a spreadsheet instantly. No login, no server storage - your data stays in the URL.">
     <meta name="twitter:image" content="https://spreadsheetlive.netlify.app/demo/main_light.png">
 
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Spreadsheet Live","applicationCategory":"BusinessApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"url":"https://spreadsheetlive.netlify.app/","image":"https://spreadsheetlive.netlify.app/demo/main_light.png","description":"Create and share a spreadsheet instantly. No login, no server storage - your data stays in the URL."}</script>
+    <script
+        type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Spreadsheet Live","applicationCategory":"BusinessApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"url":"https://spreadsheetlive.netlify.app/","image":"https://spreadsheetlive.netlify.app/demo/main_light.png","description":"Create and share a spreadsheet instantly. No login, no server storage - your data stays in the URL."}</script>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <link rel="icon" href="favicon.png" type="image/png" sizes="32x32">
     <link rel="apple-touch-icon" href="apple-touch-icon.png" sizes="180x180">
@@ -130,6 +131,8 @@
                     <i class="fa-solid fa-layer-group"></i> Tools
                 </button>
 
+                <div class="toolbar-divider"></div>
+
                 <span id="grid-size" class="grid-size"><i class="fa-solid fa-grip"></i> 10 × 10</span>
                 <a href="https://github.com/supunlakmal/spreadsheet" target="_blank" rel="noopener noreferrer"
                     class="github-link" title="View on GitHub">
@@ -138,6 +141,17 @@
             </div>
             <button id="scroll-right" class="scroll-btn right hidden" aria-label="Scroll right"><i
                     class="fa-solid fa-chevron-right"></i></button>
+
+            <!-- App Launcher (Moved out of toolbar to avoid clipping) -->
+            <div class="app-launcher-container">
+                <button id="app-launcher-btn" type="button" class="icon-btn" aria-label="Hash Apps"
+                    aria-expanded="false" title="Switch App">
+                    <i class="fa-solid fa-grip"></i>
+                </button>
+                <div id="app-launcher-menu" class="app-launcher-menu hidden">
+                    <!-- Content injected by JS -->
+                </div>
+            </div>
             <div id="presence-stack" class="presence-stack" role="list" aria-label="Active collaborators"></div>
         </div>
         <div id="readonly-banner" class="readonly-banner hidden">
